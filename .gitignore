@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+
+# Env files
+.env
+.env.local
+.env.*.local
+
+# OAuth credential files (Google client secret JSON downloads)
+client_secret*.json
+
+# Expo
+.expo/
+dist/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# Metro
+.metro-health-check*
+
+# Native builds
+apps/mobile/ios/
+apps/mobile/android/
+
+# TypeScript
+*.tsbuildinfo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Claude Code
+.claude/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Testing
+coverage/
+
+# Playwright
+apps/backend/playwright-report/
+apps/backend/test-results/

@@ -1,0 +1,27 @@
+{
+  "name": "fetch-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "mobile": "npm run start --workspace=apps/mobile",
+    "backend": "npm run dev --workspace=apps/backend",
+    "backend:start": "npm run start --workspace=apps/backend",
+    "typecheck": "tsc --noEmit --workspace=apps/mobile && tsc --noEmit --workspace=apps/backend"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "jsonwebtoken": "^9.0.3",
+    "react-native-worklets": "0.5.1"
+  },
+  "overrides": {
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-worklets": "0.5.1"
+  }
+}
