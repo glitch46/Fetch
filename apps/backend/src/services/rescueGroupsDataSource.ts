@@ -129,12 +129,20 @@ function extractPhotos(
   const photos: RawDogPhoto[] = [];
   const picRefs = animal.relationships?.pictures?.data || [];
 
+  let missingCount = 0;
   for (const ref of picRefs) {
     const pic = includedMap.get(`${ref.type}:${ref.id}`) as RescueGroupsPicture | undefined;
-    if (!pic) continue;
+    if (!pic) {
+      missingCount++;
+      continue;
+    }
 
     const photo = pictureToPhoto(pic);
     if (photo) photos.push(photo);
+  }
+
+  if (missingCount > 0) {
+    console.log(`[extractPhotos] ${animal.attributes.name}: ${picRefs.length} picture refs, ${photos.length} resolved, ${missingCount} missing from included`);
   }
 
   return photos;
@@ -231,32 +239,50 @@ export class RescueGroupsDataSource implements DataSource {
       console.log(`[${this.name}] Limited to ${limit} dogs`);
     }
 
-    // Second pass: fetch full photos for dogs where pictureCount > extracted photos.
-    // The search endpoint may only return 1 photo per dog; fetching individually gets all.
-    const dogsNeedingPhotos: Array<{ index: number; animalId: string }> = [];
+    // Second pass: fetch full photos for dogs where the search endpoint didn't include all pictures.
+    // The search endpoint often only includes 1 photo per dog in the `included` array,
+    // even though relationships.pictures.data lists all picture refs.
+    const dogsNeedingPhotos: Array<{ index: number; animalId: string; expected: number; got: number }> = [];
     for (let i = 0; i < rawDogs.length; i++) {
-      // Find the matching animal to check pictureCount
+      // Find the matching animal to check how many pictures it should have
       const animal = animals.find(
         (a) => (a.attributes.rescueId || a.id) === rawDogs[i].external_id
       );
-      const pictureCount = (animal?.attributes.pictureCount as number) || 0;
-      if (animal && pictureCount > rawDogs[i].photos.length) {
-        dogsNeedingPhotos.push({ index: i, animalId: animal.id });
+      if (!animal) continue;
+
+      // Use the relationship refs array length — this is the actual count of pictures
+      // associated with the animal, regardless of how many were in the `included` array.
+      const expectedPictureCount = animal.relationships?.pictures?.data?.length || 0;
+      if (expectedPictureCount > rawDogs[i].photos.length) {
+        dogsNeedingPhotos.push({
+          index: i,
+          animalId: animal.id,
+          expected: expectedPictureCount,
+          got: rawDogs[i].photos.length,
+        });
       }
     }
+
+    console.log(`[${this.name}] ${dogsNeedingPhotos.length}/${rawDogs.length} dogs need individual photo fetches`);
 
     if (dogsNeedingPhotos.length > 0) {
       console.log(`[${this.name}] Fetching full photos for ${dogsNeedingPhotos.length} multi-photo dogs...`);
 
-      for (const { index, animalId } of dogsNeedingPhotos) {
-        const pics = await fetchAnimalPhotos(animalId);
-        if (pics.length > 0) {
-          const photos = pics
-            .map(pictureToPhoto)
-            .filter((p): p is RawDogPhoto => p !== null);
-          if (photos.length > rawDogs[index].photos.length) {
-            rawDogs[index].photos = photos;
+      for (const { index, animalId, expected, got } of dogsNeedingPhotos) {
+        try {
+          const pics = await fetchAnimalPhotos(animalId);
+          if (pics.length > 0) {
+            const photos = pics
+              .map(pictureToPhoto)
+              .filter((p): p is RawDogPhoto => p !== null);
+            if (photos.length > rawDogs[index].photos.length) {
+              console.log(`[${this.name}] "${rawDogs[index].name}": ${got} -> ${photos.length} photos (expected ${expected})`);
+              rawDogs[index].photos = photos;
+            }
           }
+        } catch (err) {
+          console.warn(`[${this.name}] Failed to fetch photos for animal ${animalId}:`, err);
+          // Keep whatever photos we already have — don't crash the sync
         }
       }
     }
