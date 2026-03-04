@@ -110,6 +110,11 @@ interface RescueGroupsResponse {
   };
 }
 
+interface RescueGroupsSingleResponse {
+  data: RescueGroupsAnimal;
+  included?: Array<RescueGroupsPicture | RescueGroupsBreed | RescueGroupsColor>;
+}
+
 // ── HTTP Helpers with 429 Retry ──────────────────────────
 
 async function apiGet<T>(url: string): Promise<AxiosResponse<T>> {
@@ -217,4 +222,27 @@ export async function fetchAdoptableDogs(): Promise<{
 
   console.log(`[RESCUEGROUPS] Total adoptable dogs fetched: ${allAnimals.length}`);
   return { animals: allAnimals, included: includedMap };
+}
+
+/**
+ * Fetches all pictures for a single animal by its API ID.
+ * The individual animal endpoint returns all pictures in the `included` array
+ * (unlike the search endpoint which may only return 1 per animal).
+ * Note: the individual endpoint does NOT populate relationships.pictures.data refs,
+ * so we grab pictures directly from the included array by type.
+ */
+export async function fetchAnimalPhotos(animalId: string): Promise<RescueGroupsPicture[]> {
+  try {
+    const url = `${BASE_URL}/public/animals/${animalId}?include=pictures`;
+    const { data } = await apiGet<RescueGroupsSingleResponse>(url);
+
+    const pics = (data.included || []).filter(
+      (inc): inc is RescueGroupsPicture => inc.type === 'pictures'
+    );
+
+    return pics;
+  } catch (err) {
+    console.warn(`[RESCUEGROUPS] Failed to fetch photos for animal ${animalId}:`, err);
+    return [];
+  }
 }

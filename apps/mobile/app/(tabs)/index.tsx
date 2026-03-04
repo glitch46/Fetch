@@ -19,6 +19,7 @@ import Animated, {
   interpolate,
   Extrapolation,
 } from 'react-native-reanimated';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useDogsStore } from '../../store/useDogsStore';
@@ -72,10 +73,30 @@ export default function SwipeDeckScreen() {
     fetchDogs();
   }, [fetchDogs]);
 
-  const handleSwipe = useCallback(
+  // Preload next 3 dogs' images so they're cached before the user sees them
+  useEffect(() => {
+    const toPreload = dogs
+      .slice(currentIndex + 1, currentIndex + 4)
+      .flatMap((dog) => dog.photos?.slice(0, 1) || [])
+      .map((photo) => photo?.large || photo?.medium)
+      .filter(Boolean) as string[];
+
+    if (toPreload.length > 0) {
+      Image.prefetch(toPreload);
+    }
+  }, [currentIndex, dogs]);
+
+  const handleSwipeComplete = useCallback(
     async (direction: 'left' | 'right') => {
       const dog = dogs[currentIndex];
       if (!dog) return;
+
+      // Reset shared values FIRST so the next card renders clean
+      translateX.value = 0;
+      translateY.value = 0;
+
+      // Then advance the index
+      setCurrentIndex(currentIndex + 1);
 
       try {
         await api.post('/swipes', { dog_id: dog.id, direction });
@@ -87,8 +108,6 @@ export default function SwipeDeckScreen() {
         addLikedDog(dog);
         triggerMatch(dog);
       }
-
-      setCurrentIndex(currentIndex + 1);
     },
     [dogs, currentIndex]
   );
@@ -96,13 +115,11 @@ export default function SwipeDeckScreen() {
   const animateSwipe = useCallback(
     (direction: 'left' | 'right') => {
       const targetX = direction === 'right' ? SCREEN_WIDTH + 100 : -SCREEN_WIDTH - 100;
-      translateX.value = withTiming(targetX, { duration: 300 }, () => {
-        runOnJS(handleSwipe)(direction);
-        translateX.value = 0;
-        translateY.value = 0;
+      translateX.value = withTiming(targetX, { duration: 300 }, (finished) => {
+        if (finished) runOnJS(handleSwipeComplete)(direction);
       });
     },
-    [handleSwipe]
+    [handleSwipeComplete]
   );
 
   const panGesture = Gesture.Pan()
@@ -112,16 +129,12 @@ export default function SwipeDeckScreen() {
     })
     .onEnd((event) => {
       if (event.translationX > SWIPE_THRESHOLD) {
-        translateX.value = withTiming(SCREEN_WIDTH + 100, { duration: 250 }, () => {
-          runOnJS(handleSwipe)('right');
-          translateX.value = 0;
-          translateY.value = 0;
+        translateX.value = withTiming(SCREEN_WIDTH + 100, { duration: 250 }, (finished) => {
+          if (finished) runOnJS(handleSwipeComplete)('right');
         });
       } else if (event.translationX < -SWIPE_THRESHOLD) {
-        translateX.value = withTiming(-SCREEN_WIDTH - 100, { duration: 250 }, () => {
-          runOnJS(handleSwipe)('left');
-          translateX.value = 0;
-          translateY.value = 0;
+        translateX.value = withTiming(-SCREEN_WIDTH - 100, { duration: 250 }, (finished) => {
+          if (finished) runOnJS(handleSwipeComplete)('left');
         });
       } else {
         translateX.value = withSpring(0);
@@ -243,7 +256,7 @@ export default function SwipeDeckScreen() {
         {/* Next card (behind) */}
         {nextDog && (
           <View style={[styles.cardWrapper, { transform: [{ scale: 0.95 }] }]}>
-            <DogCard dog={nextDog} />
+            <DogCard key={nextDog.id} dog={nextDog} />
           </View>
         )}
 
@@ -273,6 +286,7 @@ export default function SwipeDeckScreen() {
             </Animated.View>
 
             <DogCard
+              key={currentDog.id}
               dog={currentDog}
               onPress={() => router.push(`/dog/${currentDog.id}`)}
             />

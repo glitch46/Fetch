@@ -49,14 +49,8 @@ export async function syncDogs(limit?: number): Promise<string[]> {
       // Normalize tags from raw scraped strings to canonical keys
       const normalizedTags = normalizeRawTags(raw.tags);
 
-      // Convert flat photo URLs to DogPhoto objects (for compatibility with shared Dog type)
-      // Each URL is used for all size variants since we don't have size-specific URLs from adopets
-      const photos = raw.photos.map((url) => ({
-        small: url,
-        medium: url,
-        large: url,
-        full: url,
-      }));
+      // Photos already come as proper objects with size variants from the data source
+      const photos = raw.photos;
 
       // Build attributes from available data
       const attributes = {

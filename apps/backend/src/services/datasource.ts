@@ -7,6 +7,13 @@ export type AgeGroup = 'Baby' | 'Young' | 'Adult' | 'Senior';
 export type DogSize = 'Small' | 'Medium' | 'Large' | 'Extra Large';
 export type DogGender = 'Male' | 'Female' | 'Unknown';
 
+export interface RawDogPhoto {
+  small: string;
+  medium: string;
+  large: string;
+  full: string;
+}
+
 /**
  * Raw dog data as returned by a DataSource.
  * This is the intermediate format between external APIs and our DB schema.
@@ -22,7 +29,7 @@ export interface RawDog {
   gender: DogGender;
   color: string | null;           // primary color from SODA
   description: string | null;     // from adopets.com scrape
-  photos: string[];               // flat array of photo URLs from adopets.com
+  photos: RawDogPhoto[];           // photo objects with size variants
   tags: string[];                 // behavioral tags from adopets.com
   adoption_url: string | null;    // adopets.com deep link for this dog
   intake_date: Date | null;       // source_date from SODA — used for days_in_shelter

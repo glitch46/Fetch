@@ -1,5 +1,5 @@
 // Dog Profile screen — owned by Mobile Agent (implementation)
-// Full Bumble-style profile with photo gallery, AI prompts, details, and adopt/foster CTAs
+// Vertical photo layout interspersed with AI prompt cards
 
 import { useEffect, useState, useRef } from 'react';
 import {
@@ -9,7 +9,6 @@ import {
   ScrollView,
   Dimensions,
   TouchableOpacity,
-  Pressable,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -23,7 +22,8 @@ import type { Dog } from '@fetch/shared';
 import { cleanText } from '../../utils/cleanText';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const PHOTO_HEIGHT = SCREEN_HEIGHT * 0.55;
+const HERO_HEIGHT = SCREEN_HEIGHT * 0.55;
+const INTERSPERSED_PHOTO_HEIGHT = SCREEN_HEIGHT * 0.45;
 
 interface DogPrompt {
   prompt: string;
@@ -37,7 +37,6 @@ export default function DogProfileScreen() {
   const scrollRef = useRef<ScrollView>(null);
 
   const dog = dogs.find((d) => d.id === id) || likedDogs.find((d) => d.id === id);
-  const [photoIndex, setPhotoIndex] = useState(0);
   const [prompts, setPrompts] = useState<DogPrompt[]>([]);
   const [promptsLoading, setPromptsLoading] = useState(false);
 
@@ -74,15 +73,6 @@ export default function DogProfileScreen() {
     );
   }
 
-  function handlePhotoTap(locationX: number) {
-    if (photos.length <= 1) return;
-    if (locationX > SCREEN_WIDTH / 2) {
-      setPhotoIndex((i) => Math.min(i + 1, photos.length - 1));
-    } else {
-      setPhotoIndex((i) => Math.max(i - 1, 0));
-    }
-  }
-
   async function handleAction(action: 'adopt' | 'foster') {
     try {
       await api.post('/matches', { dog_id: dog!.id, action });
@@ -98,48 +88,44 @@ export default function DogProfileScreen() {
     }
   }
 
-  const currentPhotoUrl = photos[photoIndex]?.full || photos[photoIndex]?.large || null;
+  const heroPhotoUrl = photos[0]?.full || photos[0]?.large || null;
+  const remainingPhotos = photos.slice(1);
+
+  // Build interspersed photo+prompt content for the "Get to Know Me" section
+  const interspersedItems: Array<{ type: 'photo'; index: number } | { type: 'prompt'; index: number }> = [];
+  const maxItems = Math.max(remainingPhotos.length, prompts.length);
+  for (let i = 0; i < maxItems; i++) {
+    if (i < remainingPhotos.length) {
+      interspersedItems.push({ type: 'photo', index: i });
+    }
+    if (i < prompts.length) {
+      interspersedItems.push({ type: 'prompt', index: i });
+    }
+  }
 
   return (
     <View style={styles.container}>
       <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false}>
-        {/* Photo Gallery */}
-        <Pressable onPress={(e) => handlePhotoTap(e.nativeEvent.locationX)}>
-          <View style={styles.photoContainer}>
-            {currentPhotoUrl ? (
-              <Image
-                source={{ uri: currentPhotoUrl }}
-                style={styles.photo}
-                contentFit="cover"
-                transition={200}
-              />
-            ) : (
-              <View style={[styles.photo, styles.noPhoto]}>
-                <Text style={styles.noPhotoText}>No Photo</Text>
-              </View>
-            )}
+        {/* Hero Photo */}
+        <View style={styles.heroContainer}>
+          {heroPhotoUrl ? (
+            <Image
+              source={{ uri: heroPhotoUrl }}
+              style={styles.heroPhoto}
+              contentFit="cover"
+              transition={200}
+            />
+          ) : (
+            <View style={[styles.heroPhoto, styles.noPhoto]}>
+              <Text style={styles.noPhotoText}>No Photo</Text>
+            </View>
+          )}
 
-            {/* Progress bar segments */}
-            {photos.length > 1 && (
-              <View style={styles.progressBar}>
-                {photos.map((_, i) => (
-                  <View
-                    key={i}
-                    style={[
-                      styles.progressSegment,
-                      i === photoIndex && styles.progressActive,
-                    ]}
-                  />
-                ))}
-              </View>
-            )}
-
-            {/* Close button */}
-            <TouchableOpacity style={styles.closeButton} onPress={() => router.back()}>
-              <Ionicons name="chevron-down" size={28} color="#fff" />
-            </TouchableOpacity>
-          </View>
-        </Pressable>
+          {/* Close button */}
+          <TouchableOpacity style={styles.closeButton} onPress={() => router.back()}>
+            <Ionicons name="chevron-down" size={28} color="#fff" />
+          </TouchableOpacity>
+        </View>
 
         {/* Identity Bar */}
         <View style={styles.identityBar}>
@@ -165,42 +151,7 @@ export default function DogProfileScreen() {
           </View>
         )}
 
-        {/* AI Prompts Section */}
-        {prompts.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Get to Know Me</Text>
-            {prompts.map((p, i) => (
-              <View key={i} style={styles.promptCard}>
-                <Text style={styles.promptLabel}>{cleanText(p.prompt)}</Text>
-                <Text style={styles.promptResponse}>{cleanText(p.response)}</Text>
-              </View>
-            ))}
-          </View>
-        )}
-        {promptsLoading && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Get to Know Me</Text>
-            <View style={styles.promptCard}>
-              <Text style={styles.promptLoading}>Loading personality...</Text>
-            </View>
-          </View>
-        )}
-
-        {/* Characteristics Section */}
-        {dog.tags && dog.tags.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Characteristics</Text>
-            <View style={styles.chipGrid}>
-              {dog.tags.map((tag, i) => (
-                <View key={i} style={styles.chip}>
-                  <Text style={styles.chipText}>{tag}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* Details Section */}
+        {/* Details Section — moved up */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Details</Text>
           <DetailRow icon="resize" label="Size" value={dog.size} />
@@ -233,6 +184,63 @@ export default function DogProfileScreen() {
             <DetailRow icon="home" label="House Trained" value="Yes" />
           )}
         </View>
+
+        {/* Characteristics Section — moved up */}
+        {dog.tags && dog.tags.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Characteristics</Text>
+            <View style={styles.chipGrid}>
+              {dog.tags.map((tag, i) => (
+                <View key={i} style={styles.chip}>
+                  <Text style={styles.chipText}>{tag}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Get to Know Me — photos interspersed with AI prompt cards */}
+        {(interspersedItems.length > 0 || promptsLoading) && (
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Get to Know Me</Text>
+          </View>
+        )}
+
+        {promptsLoading && interspersedItems.length === 0 && (
+          <View style={styles.section}>
+            <View style={styles.promptCard}>
+              <Text style={styles.promptLoading}>Loading personality...</Text>
+            </View>
+          </View>
+        )}
+
+        {interspersedItems.map((item) => {
+          if (item.type === 'photo') {
+            const photo = remainingPhotos[item.index];
+            const url = photo?.full || photo?.large || null;
+            if (!url) return null;
+            return (
+              <View key={`photo-${item.index}`} style={styles.interspersedPhotoWrapper}>
+                <Image
+                  source={{ uri: url }}
+                  style={styles.interspersedPhoto}
+                  contentFit="cover"
+                  transition={200}
+                />
+              </View>
+            );
+          } else {
+            const p = prompts[item.index];
+            return (
+              <View key={`prompt-${item.index}`} style={styles.promptSection}>
+                <View style={styles.promptCard}>
+                  <Text style={styles.promptLabel}>{cleanText(p.prompt)}</Text>
+                  <Text style={styles.promptResponse}>{cleanText(p.response)}</Text>
+                </View>
+              </View>
+            );
+          }
+        })}
 
         {/* Find Me On Section */}
         {(dog.adoption_url || dog.petfinder_url) && (
@@ -344,12 +352,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito_600SemiBold',
     color: colors.secondary,
   },
-  photoContainer: {
+  heroContainer: {
     width: SCREEN_WIDTH,
-    height: PHOTO_HEIGHT,
+    height: HERO_HEIGHT,
     backgroundColor: colors.surface,
   },
-  photo: {
+  heroPhoto: {
     width: '100%',
     height: '100%',
   },
@@ -362,23 +370,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 18,
     fontFamily: 'Nunito_600SemiBold',
-  },
-  progressBar: {
-    position: 'absolute',
-    top: 12,
-    left: 12,
-    right: 12,
-    flexDirection: 'row',
-    gap: 4,
-  },
-  progressSegment: {
-    flex: 1,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: 'rgba(255,255,255,0.4)',
-  },
-  progressActive: {
-    backgroundColor: '#fff',
   },
   closeButton: {
     position: 'absolute',
@@ -430,6 +421,11 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 8,
   },
+  sectionHeader: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 0,
+  },
   sectionTitle: {
     fontSize: 18,
     fontFamily: 'Nunito_700Bold',
@@ -442,11 +438,24 @@ const styles = StyleSheet.create({
     color: colors.text,
     lineHeight: 22,
   },
+  interspersedPhotoWrapper: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  interspersedPhoto: {
+    width: '100%',
+    height: INTERSPERSED_PHOTO_HEIGHT,
+    borderRadius: 16,
+  },
+  promptSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 4,
+  },
   promptCard: {
     backgroundColor: colors.white,
     borderRadius: 16,
     padding: 16,
-    marginBottom: 12,
+    marginBottom: 8,
     borderLeftWidth: 4,
     borderLeftColor: colors.secondary,
   },

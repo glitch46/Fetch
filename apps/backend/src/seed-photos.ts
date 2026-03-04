@@ -1,5 +1,5 @@
-// Temporary script to seed placeholder photos from Dog CEO API
-// Focuses on mixed breed / mutt photos
+// Script to seed supplemental dog photos from Dog CEO API
+// Replaces any broken placedog.net URLs and adds photos for dogs with only 1
 // Run with: npx tsx src/seed-photos.ts
 
 import dotenv from 'dotenv';
@@ -22,36 +22,24 @@ if (envPath) {
 
 const DOG_CEO_BASE = 'https://dog.ceo/api';
 
-// Mixed/mutt-like breeds to pull photos from (weighted toward mutts)
+interface DogPhoto {
+  small: string;
+  medium: string;
+  large: string;
+  full: string;
+}
+
+// Breeds to pull photos from (common shelter breeds)
 const BREEDS = [
-  'mix',        // primary — actual mixed breed dogs
-  'mix',        // double-weight
-  'mix',        // triple-weight
-  'pitbull',    // very common shelter mix
-  'labrador',   // common shelter mix
-  'hound',      // common shelter mix
-  'terrier',    // common shelter mix
-  'cattledog',  // common shelter mix
-  'shepherd',   // common shelter mix
-  'boxer',      // common shelter mix
-  'retriever',  // common shelter mix
-  'chihuahua',  // common shelter dog
-  'husky',      // common shelter dog
-  'collie',     // common shelter mix
-  'beagle',     // common shelter dog
+  'pitbull', 'labrador', 'hound', 'terrier', 'cattledog',
+  'shepherd/german', 'boxer', 'retriever/golden', 'chihuahua',
+  'husky', 'collie', 'beagle', 'rottweiler', 'poodle',
+  'bulldog', 'mastiff', 'dane/great', 'doberman',
 ];
 
 async function fetchBreedPhotos(breed: string, count: number): Promise<string[]> {
   try {
-    // Handle sub-breeds (e.g., "shepherd" -> "german/shepherd")
-    let url: string;
-    if (breed === 'shepherd') {
-      url = `${DOG_CEO_BASE}/breed/german/shepherd/images/random/${count}`;
-    } else if (breed === 'retriever') {
-      url = `${DOG_CEO_BASE}/breed/retriever/golden/images/random/${count}`;
-    } else {
-      url = `${DOG_CEO_BASE}/breed/${breed}/images/random/${count}`;
-    }
+    const url = `${DOG_CEO_BASE}/breed/${breed}/images/random/${count}`;
     const { data } = await axios.get(url);
     return data.message || [];
   } catch {
@@ -60,34 +48,23 @@ async function fetchBreedPhotos(breed: string, count: number): Promise<string[]>
   }
 }
 
+function hasbrokenPhotos(photos: DogPhoto[]): boolean {
+  return photos.some((p) => p.large?.includes('placedog.net'));
+}
+
 async function main() {
   const { createClient } = await import('@supabase/supabase-js');
   const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!);
 
-  // Get all dogs that have no photos
-  const { data: dogs, error } = await supabase
-    .from('dogs')
-    .select('id, name, breed_primary, size')
-    .eq('status', 'adoptable')
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    console.error('[PHOTOS] Failed to fetch dogs:', error.message);
-    process.exit(1);
-  }
-
-  console.log(`[PHOTOS] Found ${dogs.length} adoptable dogs to update with photos`);
-
-  // Build a pool of mixed breed photos (fetch in bulk for efficiency)
-  console.log('[PHOTOS] Fetching placeholder photos from Dog CEO API...');
+  // Build a pool of real dog photos
+  console.log('[PHOTOS] Fetching dog photos from Dog CEO API...');
   const photoPool: string[] = [];
 
   for (const breed of BREEDS) {
-    const photos = await fetchBreedPhotos(breed, 15);
+    const photos = await fetchBreedPhotos(breed, 20);
     photoPool.push(...photos);
   }
 
-  // Deduplicate
   const uniquePhotos = [...new Set(photoPool)];
   console.log(`[PHOTOS] Collected ${uniquePhotos.length} unique photos`);
 
@@ -96,35 +73,60 @@ async function main() {
     process.exit(1);
   }
 
-  // Shuffle the photo pool
+  // Shuffle
   for (let i = uniquePhotos.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [uniquePhotos[i], uniquePhotos[j]] = [uniquePhotos[j], uniquePhotos[i]];
   }
 
-  // Assign 2-4 photos to each dog (cycling through the pool)
-  let photoIndex = 0;
+  // Get all adoptable dogs
+  const { data: dogs, error } = await supabase
+    .from('dogs')
+    .select('id, name, photos')
+    .eq('status', 'adoptable')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('[PHOTOS] Failed to fetch dogs:', error.message);
+    process.exit(1);
+  }
+
+  console.log(`[PHOTOS] Found ${dogs.length} adoptable dogs`);
+
   let updated = 0;
+  let photoIdx = 0;
+
+  function nextPhoto(): DogPhoto {
+    const url = uniquePhotos[photoIdx % uniquePhotos.length];
+    photoIdx++;
+    return { small: url, medium: url, large: url, full: url };
+  }
 
   for (const dog of dogs) {
-    // Pick 2-4 random photos for this dog
-    const numPhotos = 2 + Math.floor(Math.random() * 3); // 2, 3, or 4
-    const dogPhotos = [];
+    const existingPhotos: DogPhoto[] = typeof dog.photos === 'string'
+      ? JSON.parse(dog.photos)
+      : dog.photos || [];
 
-    for (let i = 0; i < numPhotos; i++) {
-      const url = uniquePhotos[photoIndex % uniquePhotos.length];
-      dogPhotos.push({
-        small: url,
-        medium: url,
-        large: url,
-        full: url,
-      });
-      photoIndex++;
+    const broken = hasbrokenPhotos(existingPhotos);
+    const needsMore = existingPhotos.length <= 1;
+
+    if (!broken && !needsMore) continue;
+
+    // Keep only the real (non-placedog) photos
+    const realPhotos = existingPhotos.filter((p) => !p.large?.includes('placedog.net'));
+
+    // Add 2-3 real dog photos from the pool
+    const numExtra = 2 + Math.floor(Math.random() * 2);
+    const supplemental: DogPhoto[] = [];
+    for (let i = 0; i < numExtra; i++) {
+      supplemental.push(nextPhoto());
     }
+
+    const mergedPhotos = [...realPhotos, ...supplemental];
 
     const { error: updateError } = await supabase
       .from('dogs')
-      .update({ photos: JSON.stringify(dogPhotos) })
+      .update({ photos: JSON.stringify(mergedPhotos) })
       .eq('id', dog.id);
 
     if (updateError) {
@@ -134,7 +136,7 @@ async function main() {
     }
   }
 
-  console.log(`[PHOTOS] Updated ${updated}/${dogs.length} dogs with placeholder photos`);
+  console.log(`[PHOTOS] Updated ${updated} dogs with real dog photos`);
   process.exit(0);
 }
 

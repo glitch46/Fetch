@@ -13,6 +13,9 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH - 32;
 const CARD_HEIGHT = CARD_WIDTH * 1.3;
 
+// Warm amber blurhash placeholder — matches brand palette
+const BLURHASH = 'L6Pj0^jE.AyE_3t7t7R**0o#DgR4';
+
 interface DogCardProps {
   dog: Dog;
   onPress?: () => void;
@@ -25,14 +28,21 @@ export default function DogCard({ dog, onPress }: DogCardProps) {
 
   const handleTap = useCallback(
     (locationX: number) => {
-      if (photos.length <= 1) return;
-      if (locationX > CARD_WIDTH / 2) {
+      if (photos.length <= 1) {
+        // Single photo — tap opens profile
+        onPress?.();
+        return;
+      }
+      // Multi-photo: left/right edges cycle photos, middle opens profile
+      if (locationX > CARD_WIDTH * 0.67) {
         setPhotoIndex((i) => (i + 1) % photos.length);
-      } else {
+      } else if (locationX < CARD_WIDTH * 0.33) {
         setPhotoIndex((i) => (i - 1 + photos.length) % photos.length);
+      } else {
+        onPress?.();
       }
     },
-    [photos.length]
+    [photos.length, onPress]
   );
 
   const matchLabel = dog.match_score
@@ -44,22 +54,16 @@ export default function DogCard({ dog, onPress }: DogCardProps) {
   return (
     <Pressable
       style={styles.card}
-      onPress={(e) => {
-        const x = e.nativeEvent.locationX;
-        // If tap is in the middle third, open profile; otherwise navigate photos
-        if (onPress && x > CARD_WIDTH * 0.33 && x < CARD_WIDTH * 0.67) {
-          onPress();
-        } else {
-          handleTap(x);
-        }
-      }}
+      onPress={(e) => handleTap(e.nativeEvent.locationX)}
     >
       {currentPhoto ? (
         <Image
           source={{ uri: currentPhoto }}
           style={styles.photo}
           contentFit="cover"
-          transition={200}
+          transition={150}
+          placeholder={{ blurhash: BLURHASH }}
+          cachePolicy="memory-disk"
         />
       ) : (
         <View style={[styles.photo, styles.noPhoto]}>
@@ -67,13 +71,16 @@ export default function DogCard({ dog, onPress }: DogCardProps) {
         </View>
       )}
 
-      {/* Photo indicator dots */}
+      {/* Photo indicator segments */}
       {photos.length > 1 && (
-        <View style={styles.dots}>
+        <View style={styles.progressBar}>
           {photos.map((_, i) => (
             <View
               key={i}
-              style={[styles.dot, i === photoIndex && styles.dotActive]}
+              style={[
+                styles.progressSegment,
+                i === photoIndex && styles.progressActive,
+              ]}
             />
           ))}
         </View>
@@ -145,30 +152,26 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: 'Nunito_600SemiBold',
   },
-  dots: {
+  progressBar: {
     position: 'absolute',
-    top: 12,
-    left: 0,
-    right: 0,
+    top: 10,
+    left: 12,
+    right: 12,
     flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 6,
+    gap: 4,
   },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.5)',
+  progressSegment: {
+    flex: 1,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: 'rgba(255,255,255,0.4)',
   },
-  dotActive: {
+  progressActive: {
     backgroundColor: '#fff',
-    width: 10,
-    height: 10,
-    borderRadius: 5,
   },
   matchBadge: {
     position: 'absolute',
-    top: 16,
+    top: 20,
     right: 16,
     backgroundColor: colors.primary,
     borderRadius: 16,

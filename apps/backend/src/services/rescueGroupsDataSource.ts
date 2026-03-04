@@ -2,9 +2,10 @@
 // Drop-in replacement for SodaAdopetsDataSource using the RescueGroups.org API
 // All adoptable dog data (photos, tags, breed, age) comes from a single API source
 
-import type { DataSource, RawDog, AgeGroup, DogSize, DogGender } from './datasource.js';
+import type { DataSource, RawDog, RawDogPhoto, AgeGroup, DogSize, DogGender } from './datasource.js';
 import {
   fetchAdoptableDogs,
+  fetchAnimalPhotos,
   type RescueGroupsAnimal,
   type RescueGroupsPicture,
   type RescueGroupsBreed,
@@ -101,24 +102,39 @@ function normalizeSize(sizeGroup: string | undefined): DogSize | null {
 }
 
 /**
- * Extract photo URLs from the included pictures, preferring large > original > medium > small.
+ * Convert a single RescueGroups picture to a RawDogPhoto.
+ * Falls back through sizes so every field has a usable URL.
+ */
+function pictureToPhoto(pic: RescueGroupsPicture): RawDogPhoto | null {
+  const attrs = pic.attributes;
+  const fallback = attrs.large?.url || attrs.original?.url || attrs.medium?.url || attrs.small?.url;
+  if (!fallback) return null;
+
+  return {
+    small: attrs.small?.url || fallback,
+    medium: attrs.medium?.url || fallback,
+    large: attrs.large?.url || fallback,
+    full: attrs.original?.url || attrs.large?.url || fallback,
+  };
+}
+
+/**
+ * Extract photo objects with all size variants from the included pictures.
+ * Falls back through sizes so every field has a usable URL.
  */
 function extractPhotos(
   animal: RescueGroupsAnimal,
   includedMap: Map<string, RescueGroupsPicture | RescueGroupsBreed | RescueGroupsColor>,
-): string[] {
-  const photos: string[] = [];
+): RawDogPhoto[] {
+  const photos: RawDogPhoto[] = [];
   const picRefs = animal.relationships?.pictures?.data || [];
 
   for (const ref of picRefs) {
     const pic = includedMap.get(`${ref.type}:${ref.id}`) as RescueGroupsPicture | undefined;
     if (!pic) continue;
 
-    const attrs = pic.attributes;
-    const url = attrs.large?.url || attrs.original?.url || attrs.medium?.url || attrs.small?.url;
-    if (url) {
-      photos.push(url);
-    }
+    const photo = pictureToPhoto(pic);
+    if (photo) photos.push(photo);
   }
 
   return photos;
@@ -213,6 +229,36 @@ export class RescueGroupsDataSource implements DataSource {
     if (limit && rawDogs.length > limit) {
       rawDogs = rawDogs.slice(0, limit);
       console.log(`[${this.name}] Limited to ${limit} dogs`);
+    }
+
+    // Second pass: fetch full photos for dogs where pictureCount > extracted photos.
+    // The search endpoint may only return 1 photo per dog; fetching individually gets all.
+    const dogsNeedingPhotos: Array<{ index: number; animalId: string }> = [];
+    for (let i = 0; i < rawDogs.length; i++) {
+      // Find the matching animal to check pictureCount
+      const animal = animals.find(
+        (a) => (a.attributes.rescueId || a.id) === rawDogs[i].external_id
+      );
+      const pictureCount = (animal?.attributes.pictureCount as number) || 0;
+      if (animal && pictureCount > rawDogs[i].photos.length) {
+        dogsNeedingPhotos.push({ index: i, animalId: animal.id });
+      }
+    }
+
+    if (dogsNeedingPhotos.length > 0) {
+      console.log(`[${this.name}] Fetching full photos for ${dogsNeedingPhotos.length} multi-photo dogs...`);
+
+      for (const { index, animalId } of dogsNeedingPhotos) {
+        const pics = await fetchAnimalPhotos(animalId);
+        if (pics.length > 0) {
+          const photos = pics
+            .map(pictureToPhoto)
+            .filter((p): p is RawDogPhoto => p !== null);
+          if (photos.length > rawDogs[index].photos.length) {
+            rawDogs[index].photos = photos;
+          }
+        }
+      }
     }
 
     console.log(`[${this.name}] Returning ${rawDogs.length} normalized dogs`);
