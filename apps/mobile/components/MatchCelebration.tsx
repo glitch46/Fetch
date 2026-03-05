@@ -1,11 +1,13 @@
 // Match Celebration — owned by Mobile Agent (implementation)
 // Full-screen overlay with confetti, dog photo, and adopt/foster CTAs
 
+import { useState } from 'react';
 import { View, Text, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
 import { Image } from 'expo-image';
 import * as WebBrowser from 'expo-web-browser';
 import ConfettiCannon from 'react-native-confetti-cannon';
 import { useDogsStore } from '../store/useDogsStore';
+import AdoptFosterModal from './AdoptFosterModal';
 import api from '../lib/api';
 import { colors } from '../constants/colors';
 import { cleanText } from '../utils/cleanText';
@@ -15,11 +17,16 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 export default function MatchCelebration() {
   const { matchedDog, dismissMatch } = useDogsStore();
 
+  const [modalAction, setModalAction] = useState<'adopt' | 'foster' | null>(null);
+
   if (!matchedDog) return null;
 
   const photoUrl = matchedDog.photos?.[0]?.large || matchedDog.photos?.[0]?.medium || null;
 
-  async function handleAction(action: 'adopt' | 'foster') {
+  async function handleAdoptFosterContinue() {
+    const action = modalAction!;
+    setModalAction(null);
+
     try {
       await api.post('/matches', { dog_id: matchedDog!.id, action });
     } catch {
@@ -60,14 +67,14 @@ export default function MatchCelebration() {
 
         <TouchableOpacity
           style={[styles.button, styles.adoptButton]}
-          onPress={() => handleAction('adopt')}
+          onPress={() => setModalAction('adopt')}
         >
           <Text style={styles.buttonText}>🏠 Adopt</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={[styles.button, styles.fosterButton]}
-          onPress={() => handleAction('foster')}
+          onPress={() => setModalAction('foster')}
         >
           <Text style={styles.fosterButtonText}>💛 Foster</Text>
         </TouchableOpacity>
@@ -76,6 +83,17 @@ export default function MatchCelebration() {
           <Text style={styles.dismissText}>Maybe Later</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Adopt/Foster modal with Animal ID */}
+      {modalAction && (
+        <AdoptFosterModal
+          visible={modalAction !== null}
+          dog={matchedDog}
+          action={modalAction}
+          onContinue={handleAdoptFosterContinue}
+          onClose={() => setModalAction(null)}
+        />
+      )}
     </View>
   );
 }

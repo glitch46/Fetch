@@ -49,7 +49,8 @@ CREATE TABLE dogs (
   tags            TEXT[] DEFAULT '{}',
   attributes      JSONB DEFAULT '{}',
   environment     JSONB DEFAULT '{}',
-  petfinder_url   VARCHAR(500),
+  petfinder_url   VARCHAR(500),                      -- adoption URL (RescueGroups listing or direct link)
+  -- adoption_url and foster_url are computed at serve-time from petfinder_url
   organization_id VARCHAR(20) NOT NULL DEFAULT 'TX514',
   status          VARCHAR(20) NOT NULL DEFAULT 'adoptable' CHECK (status IN ('adoptable', 'unavailable')),
   intake_date     TIMESTAMP WITH TIME ZONE,

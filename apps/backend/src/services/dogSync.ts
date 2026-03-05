@@ -9,6 +9,18 @@ import type { RawDog } from './datasource.js';
 
 const dataSource = new RescueGroupsDataSource();
 
+const AAC_FOSTER_URL = 'https://www.austintexas.gov/page/foster-care-application';
+
+/**
+ * Construct the best available adoption URL for a dog.
+ * Priority: direct URL from API > RescueGroups listing page from slug > null
+ */
+function buildAdoptionUrl(raw: RawDog): string | null {
+  if (raw.adoption_url) return raw.adoption_url;
+  if (raw.slug) return `https://rescuegroups.org/animals/${raw.slug}`;
+  return null;
+}
+
 /**
  * Main sync function called by the cron job.
  *
@@ -94,7 +106,7 @@ export async function syncDogs(limit?: number): Promise<string[]> {
             tags: normalizedTags,
             attributes,
             environment,
-            petfinder_url: raw.adoption_url,
+            petfinder_url: buildAdoptionUrl(raw),
             status: 'adoptable',
             intake_date: raw.intake_date?.toISOString() || null,
             published_at: raw.intake_date?.toISOString() || null,

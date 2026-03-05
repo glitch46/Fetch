@@ -17,6 +17,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { useDogsStore } from '../../store/useDogsStore';
 import { generateDogPrompts } from '../../services/promptGeneration';
 import PhotoGalleryModal from '../../components/PhotoGalleryModal';
+import AdoptFosterModal from '../../components/AdoptFosterModal';
 import api from '../../lib/api';
 import { colors } from '../../constants/colors';
 import type { Dog } from '@fetch/shared';
@@ -42,6 +43,7 @@ export default function DogProfileScreen() {
   const [promptsLoading, setPromptsLoading] = useState(false);
   const [galleryVisible, setGalleryVisible] = useState(false);
   const [galleryStartIndex, setGalleryStartIndex] = useState(0);
+  const [modalAction, setModalAction] = useState<'adopt' | 'foster' | null>(null);
 
   const photos = dog?.photos || [];
 
@@ -81,18 +83,27 @@ export default function DogProfileScreen() {
     );
   }
 
-  async function handleAction(action: 'adopt' | 'foster') {
+  async function handleAdoptFosterContinue() {
+    const action = modalAction!;
+    setModalAction(null);
+
     try {
       await api.post('/matches', { dog_id: dog!.id, action });
     } catch {
       // Non-blocking
     }
 
-    const url = action === 'adopt' ? dog!.adoption_url : dog!.foster_url;
+    let url: string | null = null;
+    if (action === 'adopt') {
+      // Adopt: open the dog's adoption listing
+      url = dog!.adoption_url || dog!.petfinder_url || null;
+    } else {
+      // Foster: open AAC foster application
+      url = dog!.foster_url || 'https://www.austintexas.gov/page/foster-care-application';
+    }
+
     if (url) {
       await WebBrowser.openBrowserAsync(url);
-    } else if (dog!.petfinder_url) {
-      await WebBrowser.openBrowserAsync(dog!.petfinder_url);
     }
   }
 
@@ -204,6 +215,11 @@ export default function DogProfileScreen() {
           {dog.attributes.house_trained && (
             <DetailRow icon="home" label="House Trained" value="Yes" />
           )}
+          <DetailRow
+            icon="globe-outline"
+            label="Listed On"
+            value="Austin Animal Center"
+          />
         </View>
 
         {/* Characteristics Section — moved up */}
@@ -297,15 +313,15 @@ export default function DogProfileScreen() {
       <View style={styles.bottomBar}>
         <TouchableOpacity
           style={[styles.ctaButton, styles.adoptCta]}
-          onPress={() => handleAction('adopt')}
+          onPress={() => setModalAction('adopt')}
         >
-          <Text style={styles.ctaText}>🏠 Adopt</Text>
+          <Text style={styles.ctaText}>Adopt</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.ctaButton, styles.fosterCta]}
-          onPress={() => handleAction('foster')}
+          onPress={() => setModalAction('foster')}
         >
-          <Text style={styles.ctaText}>💛 Foster</Text>
+          <Text style={styles.ctaText}>Foster</Text>
         </TouchableOpacity>
       </View>
 
@@ -316,6 +332,17 @@ export default function DogProfileScreen() {
         initialIndex={galleryStartIndex}
         onClose={() => setGalleryVisible(false)}
       />
+
+      {/* Adopt/Foster modal with Animal ID */}
+      {modalAction && (
+        <AdoptFosterModal
+          visible={modalAction !== null}
+          dog={dog}
+          action={modalAction}
+          onContinue={handleAdoptFosterContinue}
+          onClose={() => setModalAction(null)}
+        />
+      )}
     </View>
   );
 }

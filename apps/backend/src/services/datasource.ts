@@ -33,6 +33,8 @@ export interface RawDog {
   tags: string[];                 // behavioral tags from adopets.com
   adoption_url: string | null;    // adopets.com deep link for this dog
   intake_date: Date | null;       // source_date from SODA — used for days_in_shelter
+  slug: string | null;            // URL-friendly slug from RescueGroups (e.g., "adopt-jade-pit-bull-terrier-dog")
+  org_id: string | null;          // organization ID from RescueGroups (e.g., "1951" for AAC)
 }
 
 /**

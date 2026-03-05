@@ -48,8 +48,8 @@ function dbRowToDog(row: Record<string, unknown>): Dog {
     matched_preferences: [],
     prompts: (row.prompts as Dog['prompts']) || null,
     days_in_shelter: (row.days_in_shelter as number) ?? null,
-    adoption_url: (row.adoption_url as string) || null,
-    foster_url: (row.foster_url as string) || null,
+    adoption_url: (row.petfinder_url as string) || null,
+    foster_url: 'https://www.austintexas.gov/page/foster-care-application',
   };
 }
 

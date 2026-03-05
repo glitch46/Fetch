@@ -245,6 +245,8 @@ function normalizeRescueGroupsDog(
     tags: extractTags(animal),
     adoption_url: animal.attributes.url || null,
     intake_date: null, // RescueGroups does not provide intake date
+    slug: (animal.attributes.slug as string) || null,
+    org_id: animal.relationships?.orgs?.data?.[0]?.id || null,
   };
 }
 
