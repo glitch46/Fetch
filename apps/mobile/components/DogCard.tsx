@@ -61,6 +61,7 @@ export default function DogCard({ dog, onPress }: DogCardProps) {
           source={{ uri: currentPhoto }}
           style={styles.photo}
           contentFit="cover"
+          contentPosition="top"
           transition={150}
           placeholder={{ blurhash: BLURHASH }}
           cachePolicy="memory-disk"

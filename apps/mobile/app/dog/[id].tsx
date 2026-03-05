@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import { useDogsStore } from '../../store/useDogsStore';
 import { generateDogPrompts } from '../../services/promptGeneration';
+import PhotoGalleryModal from '../../components/PhotoGalleryModal';
 import api from '../../lib/api';
 import { colors } from '../../constants/colors';
 import type { Dog } from '@fetch/shared';
@@ -39,8 +40,15 @@ export default function DogProfileScreen() {
   const dog = dogs.find((d) => d.id === id) || likedDogs.find((d) => d.id === id);
   const [prompts, setPrompts] = useState<DogPrompt[]>([]);
   const [promptsLoading, setPromptsLoading] = useState(false);
+  const [galleryVisible, setGalleryVisible] = useState(false);
+  const [galleryStartIndex, setGalleryStartIndex] = useState(0);
 
   const photos = dog?.photos || [];
+
+  function openGallery(photoIndex: number) {
+    setGalleryStartIndex(photoIndex);
+    setGalleryVisible(true);
+  }
 
   useEffect(() => {
     if (!dog) return;
@@ -107,12 +115,17 @@ export default function DogProfileScreen() {
     <View style={styles.container}>
       <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false}>
         {/* Hero Photo */}
-        <View style={styles.heroContainer}>
+        <TouchableOpacity
+          activeOpacity={0.9}
+          style={styles.heroContainer}
+          onPress={() => photos.length > 0 && openGallery(0)}
+        >
           {heroPhotoUrl ? (
             <Image
               source={{ uri: heroPhotoUrl }}
               style={styles.heroPhoto}
               contentFit="cover"
+              contentPosition="top"
               transition={200}
             />
           ) : (
@@ -121,11 +134,19 @@ export default function DogProfileScreen() {
             </View>
           )}
 
+          {/* Photo count indicator */}
+          {photos.length > 1 && (
+            <View style={styles.photoCountBadge}>
+              <Ionicons name="images-outline" size={14} color="#fff" />
+              <Text style={styles.photoCountText}>{photos.length}</Text>
+            </View>
+          )}
+
           {/* Close button */}
           <TouchableOpacity style={styles.closeButton} onPress={() => router.back()}>
             <Ionicons name="chevron-down" size={28} color="#fff" />
           </TouchableOpacity>
-        </View>
+        </TouchableOpacity>
 
         {/* Identity Bar */}
         <View style={styles.identityBar}>
@@ -219,15 +240,24 @@ export default function DogProfileScreen() {
             const photo = remainingPhotos[item.index];
             const url = photo?.full || photo?.large || null;
             if (!url) return null;
+            // item.index is the index within remainingPhotos (0-based),
+            // add 1 to account for the hero photo at index 0
+            const fullIndex = item.index + 1;
             return (
-              <View key={`photo-${item.index}`} style={styles.interspersedPhotoWrapper}>
+              <TouchableOpacity
+                key={`photo-${item.index}`}
+                activeOpacity={0.9}
+                style={styles.interspersedPhotoWrapper}
+                onPress={() => openGallery(fullIndex)}
+              >
                 <Image
                   source={{ uri: url }}
                   style={styles.interspersedPhoto}
                   contentFit="cover"
+                  contentPosition="top"
                   transition={200}
                 />
-              </View>
+              </TouchableOpacity>
             );
           } else {
             const p = prompts[item.index];
@@ -278,6 +308,14 @@ export default function DogProfileScreen() {
           <Text style={styles.ctaText}>💛 Foster</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Full-screen photo gallery */}
+      <PhotoGalleryModal
+        visible={galleryVisible}
+        photos={photos}
+        initialIndex={galleryStartIndex}
+        onClose={() => setGalleryVisible(false)}
+      />
     </View>
   );
 }
@@ -369,6 +407,23 @@ const styles = StyleSheet.create({
   noPhotoText: {
     color: colors.textSecondary,
     fontSize: 18,
+    fontFamily: 'Nunito_600SemiBold',
+  },
+  photoCountBadge: {
+    position: 'absolute',
+    bottom: 12,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  photoCountText: {
+    color: '#fff',
+    fontSize: 13,
     fontFamily: 'Nunito_600SemiBold',
   },
   closeButton: {
