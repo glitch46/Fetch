@@ -21,7 +21,7 @@ if (envPath) {
 
 console.log('[SYNC] Starting manual sync...');
 console.log('[SYNC] SUPABASE_URL:', process.env.SUPABASE_URL);
-console.log('[SYNC] RESCUEGROUPS_API_KEY:', process.env.RESCUEGROUPS_API_KEY ? 'SET' : 'MISSING');
+console.log('[SYNC] Data source: Petfinder scraper');
 
 async function main() {
   // Dynamic import so db/client.ts sees the env vars

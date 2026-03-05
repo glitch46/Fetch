@@ -76,6 +76,7 @@ function dbRowToDog(
     days_in_shelter: (row.days_in_shelter as number) ?? null,
     adoption_url: (row.petfinder_url as string) || null,
     foster_url: 'https://www.austintexas.gov/page/foster-care-application',
+    last_synced_at: (row.last_synced_at as string) || null,
   };
 }
 

@@ -7,8 +7,8 @@ import { syncDogs } from '../services/dogSync.js';
 import { sendNewMatchNotifications, sendUrgentDogNotifications } from '../services/notifications.js';
 
 export function startCronJobs() {
-  // Run dog sync every 72 hours (at midnight every 3rd day)
-  cron.schedule('0 0 */3 * *', async () => {
+  // Run dog sync every 24 hours (at 3 AM daily)
+  cron.schedule('0 3 * * *', async () => {
     console.log('[CRON] Starting dog sync...');
     try {
       const newDogIds = await syncDogs();
@@ -28,5 +28,5 @@ export function startCronJobs() {
     }
   });
 
-  console.log('[CRON] Dog sync job scheduled (every 72 hours)');
+  console.log('[CRON] Dog sync job scheduled (every 24 hours)');
 }

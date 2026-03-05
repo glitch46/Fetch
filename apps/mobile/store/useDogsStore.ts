@@ -43,21 +43,15 @@ export const useDogsStore = create<DogsState>((set, get) => ({
     try {
       set({ isLoading: true });
       const { data: response } = await api.get('/swipes/liked');
-      if (response?.data?.items) {
-        const items = response.data.items.map((dog: Dog) => ({
-          ...dog,
-          name: dog.name.replace(/^\*+/, '').trim(),
-          photos: typeof dog.photos === 'string' ? JSON.parse(dog.photos) : dog.photos,
-        }));
-        set({ likedDogs: items });
-      } else if (response?.data) {
-        const items = (Array.isArray(response.data) ? response.data : []).map((dog: Dog) => ({
-          ...dog,
-          name: dog.name.replace(/^\*+/, '').trim(),
-          photos: typeof dog.photos === 'string' ? JSON.parse(dog.photos) : dog.photos,
-        }));
-        set({ likedDogs: items });
-      }
+      // Backend returns { data: Dog[], error: null }
+      const raw = response?.data;
+      const list = Array.isArray(raw) ? raw : [];
+      const items = list.map((dog: Dog) => ({
+        ...dog,
+        name: dog.name.replace(/^\*+/, '').trim(),
+        photos: typeof dog.photos === 'string' ? JSON.parse(dog.photos) : dog.photos,
+      }));
+      set({ likedDogs: items });
     } catch (err) {
       console.error('[DOGS] Failed to fetch liked dogs:', err);
     } finally {

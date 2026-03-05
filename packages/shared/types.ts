@@ -61,6 +61,7 @@ export interface Dog {
   days_in_shelter: number | null;
   adoption_url: string | null;
   foster_url: string | null;
+  last_synced_at: string | null;
 }
 
 export interface Swipe {

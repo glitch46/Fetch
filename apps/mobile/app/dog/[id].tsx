@@ -24,6 +24,20 @@ import type { Dog } from '@fetch/shared';
 import { cleanText } from '../../utils/cleanText';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+function formatLastVerified(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffHours < 1) return 'Just now';
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays} days ago`;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
 const HERO_HEIGHT = SCREEN_HEIGHT * 0.55;
 const INTERSPERSED_PHOTO_HEIGHT = SCREEN_HEIGHT * 0.45;
 
@@ -215,11 +229,13 @@ export default function DogProfileScreen() {
           {dog.attributes.house_trained && (
             <DetailRow icon="home" label="House Trained" value="Yes" />
           )}
-          <DetailRow
-            icon="globe-outline"
-            label="Listed On"
-            value="Austin Animal Center"
-          />
+          {dog.last_synced_at && (
+            <DetailRow
+              icon="checkmark-shield-outline"
+              label="Last Verified"
+              value={formatLastVerified(dog.last_synced_at)}
+            />
+          )}
         </View>
 
         {/* Characteristics Section — moved up */}
@@ -229,7 +245,7 @@ export default function DogProfileScreen() {
             <View style={styles.chipGrid}>
               {dog.tags.map((tag, i) => (
                 <View key={i} style={styles.chip}>
-                  <Text style={styles.chipText}>{tag}</Text>
+                  <Text style={styles.chipText}>{tag.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</Text>
                 </View>
               ))}
             </View>
