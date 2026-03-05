@@ -155,8 +155,21 @@ export async function dogsRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Sort by match score descending (null scores at the end)
+      // Sort: dogs with multiple photos first, then by match score descending.
+      // This ensures the swipe deck leads with richer, more engaging profiles.
       results.sort((a, b) => {
+        const aPhotos = a.photos?.length || 0;
+        const bPhotos = b.photos?.length || 0;
+        const aMulti = aPhotos > 1 ? 1 : 0;
+        const bMulti = bPhotos > 1 ? 1 : 0;
+
+        // Primary: multi-photo dogs first
+        if (aMulti !== bMulti) return bMulti - aMulti;
+
+        // Within multi-photo tier, more photos first
+        if (aMulti && bMulti && aPhotos !== bPhotos) return bPhotos - aPhotos;
+
+        // Secondary: match score descending (null scores at the end)
         if (a.match_score === null && b.match_score === null) return 0;
         if (a.match_score === null) return 1;
         if (b.match_score === null) return -1;

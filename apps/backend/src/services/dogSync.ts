@@ -90,7 +90,7 @@ export async function syncDogs(limit?: number): Promise<string[]> {
             size: raw.size || 'Medium',
             gender: raw.gender,
             description: raw.description,
-            photos: JSON.stringify(photos),
+            photos: photos,
             tags: normalizedTags,
             attributes,
             environment,
