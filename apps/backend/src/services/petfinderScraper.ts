@@ -10,8 +10,8 @@ import { chromium, type Browser, type Page } from 'playwright';
 import type { RawDog, RawDogPhoto, AgeGroup, DogSize, DogGender } from './datasource.js';
 
 const SEARCH_URL = 'https://www.petfinder.com/search/dogs-for-adoption/us/tx/austin/';
-const SEARCH_DISTANCE = '20mi'; // Override the default 100mi radius via GraphQL interception
-const DEFAULT_LIMIT = 100; // Max dogs to scrape per sync run
+const SEARCH_DISTANCE = '20mi';
+const SCRAPE_TIMEOUT_MS = 2 * 60 * 60 * 1000; // Hard cap: 2 hours per scrape run
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
@@ -217,9 +217,10 @@ async function fetchDescription(
 /**
  * Main entry point — scrape Petfinder for adoptable dogs near Austin
  */
-export async function scrapePetfinderDogs(limit: number = DEFAULT_LIMIT): Promise<RawDog[]> {
+export async function scrapePetfinderDogs(limit?: number): Promise<RawDog[]> {
   console.log('[SCRAPER] Launching browser...');
   let browser: Browser | null = null;
+  const startTime = Date.now();
 
   try {
     // Must use headed mode — headless gets 403 from Akamai WAF
@@ -261,7 +262,16 @@ export async function scrapePetfinderDogs(limit: number = DEFAULT_LIMIT): Promis
     let pageNum = 1;
     let hasMore = true;
 
+    // Hard cap listing crawl to avoid triggering anti-bot blocks.
+    // For limited runs, collect up to 100 candidates to allow filtering down to the requested count.
+    const candidateTarget = typeof limit === 'number' ? Math.min(100, Math.max(limit * 2, limit)) : undefined;
+
     while (hasMore) {
+      if (Date.now() - startTime >= SCRAPE_TIMEOUT_MS) {
+        console.warn('[SCRAPER] Reached 2-hour timeout during listing scrape; stopping early');
+        break;
+      }
+
       const searchUrl = new URL(SEARCH_URL);
       if (pageNum > 1) searchUrl.searchParams.set('page', String(pageNum));
 
@@ -289,23 +299,15 @@ export async function scrapePetfinderDogs(limit: number = DEFAULT_LIMIT): Promis
 
         console.log(`[SCRAPER] Page ${pageNum}: ${intercepted.animals.length} dogs, total: ${allAnimals.length}`);
 
-        // Check if we've hit the limit
-        if (allAnimals.length >= limit) {
-          allAnimals.splice(limit);
+        // Stop listing crawl once we have enough candidates to satisfy filtered target
+        if (typeof candidateTarget === 'number' && allAnimals.length >= candidateTarget) {
+          allAnimals.splice(candidateTarget);
           hasMore = false;
           break;
         }
 
-        // Check for next page
-        const hasNextPage = await page.evaluate(() => {
-          const btns = document.querySelectorAll('a[aria-label*="Next"], button[aria-label*="Next"], [class*="pagination"] a:last-child, [class*="Pagination"] button:last-child');
-          for (const btn of btns) {
-            if (!(btn as HTMLButtonElement).disabled) return true;
-          }
-          return false;
-        });
-
-        if (!hasNextPage) {
+        // Continue until the endpoint stops returning animals.
+        if (intercepted.animals.length === 0) {
           hasMore = false;
         } else {
           pageNum++;
@@ -323,15 +325,28 @@ export async function scrapePetfinderDogs(limit: number = DEFAULT_LIMIT): Promis
     const rawDogs: RawDog[] = [];
 
     for (const animal of allAnimals) {
+      if (Date.now() - startTime >= SCRAPE_TIMEOUT_MS) {
+        console.warn('[SCRAPER] Reached 2-hour timeout during detail scrape; returning collected dogs');
+        break;
+      }
+
       try {
         const rawDog = gqlAnimalToRawDog(animal);
+
+        // Permanent rule: skip low-quality profiles with only one image
+        if (rawDog.photos.length <= 1) {
+          console.log(`[SCRAPER] Skipping ${rawDog.name}: only ${rawDog.photos.length} photo`);
+          continue;
+        }
 
         // Fetch description from detail page
         await randomDelay();
         const description = await fetchDescription(page, rawDog.adoption_url!);
-        if (description) {
-          rawDog.description = description;
+        if (!description || !description.trim()) {
+          console.log(`[SCRAPER] Skipping ${rawDog.name}: missing description`);
+          continue;
         }
+        rawDog.description = description;
 
         rawDogs.push(rawDog);
         console.log(
@@ -340,6 +355,10 @@ export async function scrapePetfinderDogs(limit: number = DEFAULT_LIMIT): Promis
       } catch (err) {
         console.warn(`[SCRAPER] Skipping ${animal.animalName}:`, err);
         continue;
+      }
+
+      if (typeof limit === 'number' && rawDogs.length >= limit) {
+        break;
       }
     }
 

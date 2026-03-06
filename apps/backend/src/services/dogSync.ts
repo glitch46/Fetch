@@ -41,11 +41,23 @@ export async function syncDogs(limit?: number): Promise<string[]> {
   console.log(`[SYNC] Processing ${rawDogs.length} dogs for upsert...`);
 
   // Step 2-4: Normalize and upsert each dog
-  const upsertedExternalIds: string[] = [];
+  const currentExternalIds: string[] = [];
   const newDogIds: string[] = [];
 
   for (const raw of rawDogs) {
     try {
+      // Permanent rule: if dog is already in app, skip processing it
+      const { data: existing } = await supabase
+        .from('dogs')
+        .select('id')
+        .eq('petfinder_id', raw.external_id)
+        .single();
+
+      if (existing) {
+        currentExternalIds.push(raw.external_id);
+        continue;
+      }
+
       // Normalize tags from raw scraped strings to canonical keys
       const normalizedTags = normalizeRawTags(raw.tags);
 
@@ -67,14 +79,7 @@ export async function syncDogs(limit?: number): Promise<string[]> {
         cats: normalizedTags.includes('experienced_with_cats') ? true : normalizedTags.includes('cat_selective') ? false : null,
       };
 
-      // Check if this dog already exists (for detecting new arrivals)
-      const { data: existing } = await supabase
-        .from('dogs')
-        .select('id')
-        .eq('petfinder_id', raw.external_id)
-        .single();
-
-      const isNew = !existing;
+      const isNew = true;
 
       // Upsert into dogs table
       const { data: upserted, error: upsertError } = await supabase
@@ -110,7 +115,7 @@ export async function syncDogs(limit?: number): Promise<string[]> {
         continue;
       }
 
-      upsertedExternalIds.push(raw.external_id);
+      currentExternalIds.push(raw.external_id);
 
       if (isNew && upserted) {
         newDogIds.push(upserted.id);
@@ -122,23 +127,25 @@ export async function syncDogs(limit?: number): Promise<string[]> {
     }
   }
 
-  console.log(`[SYNC] Upserted ${upsertedExternalIds.length}/${rawDogs.length} dogs (${newDogIds.length} new)`);
+  console.log(`[SYNC] Added ${newDogIds.length} new dogs (${currentExternalIds.length}/${rawDogs.length} active profiles retained)`);
 
-  // Step 5: Mark dogs NOT in current fetch as 'unavailable'
-  // These are dogs that were previously adoptable but are no longer in the shelter
-  if (upsertedExternalIds.length > 0) {
-    const { data: markedDogs, error: markError } = await supabase
+  // Step 5: DELETE dogs NOT in current fetch (no longer on Petfinder)
+  // Only do this on full syncs. Limited sync runs are incremental and should not prune.
+  // Cascade deletes will remove associated swipes and matches automatically.
+  if (!limit && currentExternalIds.length > 0) {
+    const { data: deletedDogs, error: deleteError } = await supabase
       .from('dogs')
-      .update({ status: 'unavailable', last_synced_at: new Date().toISOString() })
-      .eq('status', 'adoptable')
-      .not('petfinder_id', 'in', `(${upsertedExternalIds.map((id) => `"${id}"`).join(',')})`)
+      .delete()
+      .not('petfinder_id', 'in', `(${currentExternalIds.map((id) => `"${id}"`).join(',')})`)
       .select('id');
 
-    if (markError) {
-      console.error('[SYNC] Error marking unavailable dogs:', markError.message);
+    if (deleteError) {
+      console.error('[SYNC] Error deleting old dogs:', deleteError.message);
     } else {
-      console.log(`[SYNC] Marked ${markedDogs?.length || 0} dogs as unavailable`);
+      console.log(`[SYNC] Deleted ${deletedDogs?.length || 0} dogs no longer on Petfinder`);
     }
+  } else if (limit) {
+    console.log('[SYNC] Limited sync: skipping deletion pass');
   }
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
