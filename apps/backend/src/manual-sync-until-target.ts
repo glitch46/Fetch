@@ -23,25 +23,24 @@ async function main() {
 
   const perRunLimit = parseInt(process.env.SYNC_LIMIT || '50', 10) || 50;
   const targetNewDogs = parseInt(process.env.SYNC_TARGET_NEW_DOGS || '50', 10) || 50;
-  const maxAttempts = parseInt(process.env.SYNC_MAX_ATTEMPTS || '10', 10) || 10;
 
-  console.log(`[SYNC] Starting repeated syncs (limit=${perRunLimit}, target=${targetNewDogs}, maxAttempts=${maxAttempts})`);
+  console.log(`[SYNC] Starting repeated syncs (limit=${perRunLimit}, target=${targetNewDogs})`);
 
   let totalAdded = 0;
   let attempts = 0;
 
-  while (totalAdded < targetNewDogs && attempts < maxAttempts) {
+  while (totalAdded < targetNewDogs) {
     attempts += 1;
-    console.log(`[SYNC] Attempt ${attempts}...`);
+    const startPage = (attempts - 1) * 9 + 1;
+    console.log(`[SYNC] Attempt ${attempts} (startPage=${startPage})...`);
 
-    const newIds = await syncDogs(perRunLimit);
+    const newIds = await syncDogs(perRunLimit, startPage);
     totalAdded += newIds.length;
 
     console.log(`[SYNC] Attempt ${attempts} added ${newIds.length}; total added ${totalAdded}/${targetNewDogs}`);
 
     if (newIds.length === 0) {
-      console.log('[SYNC] No new dogs added this attempt; stopping to avoid redundant retries');
-      break;
+      console.log('[SYNC] No new dogs in this page window; continuing to next window');
     }
   }
 

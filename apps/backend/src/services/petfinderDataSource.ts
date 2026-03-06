@@ -6,7 +6,7 @@ import { scrapePetfinderDogs } from './petfinderScraper.js';
 export class PetfinderDataSource implements DataSource {
   name = 'petfinder-scraper';
 
-  async fetchAdoptableDogs(limit?: number): Promise<RawDog[]> {
-    return scrapePetfinderDogs(limit);
+  async fetchAdoptableDogs(limit?: number, startPage?: number): Promise<RawDog[]> {
+    return scrapePetfinderDogs(limit, startPage);
   }
 }

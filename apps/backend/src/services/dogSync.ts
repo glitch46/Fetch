@@ -20,14 +20,14 @@ const dataSource = new PetfinderDataSource();
  * 5. Mark dogs NOT in the current fetch as 'unavailable'
  * 6. Return IDs of newly inserted dogs (for push notifications)
  */
-export async function syncDogs(limit?: number): Promise<string[]> {
-  console.log(`[SYNC] Starting dog sync...${limit ? ` (limit: ${limit})` : ''}`);
+export async function syncDogs(limit?: number, startPage = 1): Promise<string[]> {
+  console.log(`[SYNC] Starting dog sync...${limit ? ` (limit: ${limit})` : ''} (startPage: ${startPage})`);
   const startTime = Date.now();
 
   // Step 1: Fetch from DataSource
   let rawDogs: RawDog[];
   try {
-    rawDogs = await dataSource.fetchAdoptableDogs(limit);
+    rawDogs = await dataSource.fetchAdoptableDogs(limit, startPage);
   } catch (err) {
     console.error('[SYNC] DataSource fetch failed:', err);
     throw err;

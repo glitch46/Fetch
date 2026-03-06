@@ -43,5 +43,5 @@ export interface RawDog {
  */
 export interface DataSource {
   name: string;
-  fetchAdoptableDogs(limit?: number): Promise<RawDog[]>;
+  fetchAdoptableDogs(limit?: number, startPage?: number): Promise<RawDog[]>;
 }

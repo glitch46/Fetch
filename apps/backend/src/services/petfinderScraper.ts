@@ -217,7 +217,7 @@ async function fetchDescription(
 /**
  * Main entry point — scrape Petfinder for adoptable dogs near Austin
  */
-export async function scrapePetfinderDogs(limit?: number): Promise<RawDog[]> {
+export async function scrapePetfinderDogs(limit?: number, startPage = 1): Promise<RawDog[]> {
   console.log('[SCRAPER] Launching browser...');
   let browser: Browser | null = null;
   const startTime = Date.now();
@@ -259,12 +259,14 @@ export async function scrapePetfinderDogs(limit?: number): Promise<RawDog[]> {
     // Navigate to search pages — the GraphQL interceptor captures animal data
     const allAnimals: GqlAnimal[] = [];
     const seenIds = new Set<string>();
-    let pageNum = 1;
+    let pageNum = Math.max(1, startPage);
     let hasMore = true;
 
     // Hard cap listing crawl to avoid triggering anti-bot blocks.
     // For limited runs, collect up to 100 candidates to allow filtering down to the requested count.
     const candidateTarget = typeof limit === 'number' ? Math.min(100, Math.max(limit * 2, limit)) : undefined;
+    const maxPagesThisRun = typeof candidateTarget === 'number' ? Math.max(1, Math.ceil(candidateTarget / 12)) : undefined;
+    const maxPageNum = typeof maxPagesThisRun === 'number' ? pageNum + maxPagesThisRun - 1 : undefined;
 
     while (hasMore) {
       if (Date.now() - startTime >= SCRAPE_TIMEOUT_MS) {
@@ -302,6 +304,11 @@ export async function scrapePetfinderDogs(limit?: number): Promise<RawDog[]> {
         // Stop listing crawl once we have enough candidates to satisfy filtered target
         if (typeof candidateTarget === 'number' && allAnimals.length >= candidateTarget) {
           allAnimals.splice(candidateTarget);
+          hasMore = false;
+          break;
+        }
+
+        if (typeof maxPageNum === 'number' && pageNum >= maxPageNum) {
           hasMore = false;
           break;
         }

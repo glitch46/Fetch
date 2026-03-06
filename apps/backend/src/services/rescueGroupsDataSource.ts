@@ -255,7 +255,7 @@ function normalizeRescueGroupsDog(
 export class RescueGroupsDataSource implements DataSource {
   name = 'rescuegroups-v5';
 
-  async fetchAdoptableDogs(limit?: number): Promise<RawDog[]> {
+  async fetchAdoptableDogs(limit?: number, _startPage?: number): Promise<RawDog[]> {
     console.log(`[${this.name}] Starting fetch...${limit ? ` (limit: ${limit})` : ''}`);
 
     const { animals, included } = await fetchAdoptableDogs();

@@ -7,24 +7,23 @@ import { syncDogs } from '../services/dogSync.js';
 import { sendNewMatchNotifications, sendUrgentDogNotifications } from '../services/notifications.js';
 
 export function startCronJobs() {
-  // Run dog sync every 3 hours and keep running until at least 50 new dogs are added.
-  cron.schedule('0 */3 * * *', async () => {
+  // Run dog sync every 2 hours and keep running until at least 50 new dogs are added.
+  cron.schedule('0 */2 * * *', async () => {
     console.log('[CRON] Starting incremental dog sync (target: 50 new dogs)...');
     try {
       const targetNewDogs = 50;
       let totalNewDogIds: string[] = [];
       let attempts = 0;
-      const maxAttempts = 5;
 
-      while (totalNewDogIds.length < targetNewDogs && attempts < maxAttempts) {
+      while (totalNewDogIds.length < targetNewDogs) {
         attempts += 1;
-        const newDogIds = await syncDogs(50);
+        const startPage = (attempts - 1) * 9 + 1;
+        const newDogIds = await syncDogs(50, startPage);
         totalNewDogIds = [...totalNewDogIds, ...newDogIds];
-        console.log(`[CRON] Attempt ${attempts}: added ${newDogIds.length} dogs (${totalNewDogIds.length}/${targetNewDogs} total)`);
+        console.log(`[CRON] Attempt ${attempts} (startPage ${startPage}): added ${newDogIds.length} dogs (${totalNewDogIds.length}/${targetNewDogs} total)`);
 
         if (newDogIds.length === 0) {
-          console.log('[CRON] No new dogs found on this attempt; stopping retry loop');
-          break;
+          console.log('[CRON] No new dogs on this page window; continuing to next window');
         }
       }
 
@@ -44,5 +43,5 @@ export function startCronJobs() {
     }
   }, { timezone: 'America/Chicago' });
 
-  console.log('[CRON] Dog sync job scheduled (every 3 hours, America/Chicago)');
+  console.log('[CRON] Dog sync job scheduled (every 2 hours, America/Chicago)');
 }
