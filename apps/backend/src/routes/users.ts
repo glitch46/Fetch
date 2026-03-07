@@ -24,17 +24,32 @@ export async function usersRoutes(fastify: FastifyInstance) {
     preHandler: [authenticate],
   }, async (request, reply) => {
     try {
-      const { data: user, error } = await supabase
+      let { data: user, error } = await supabase
         .from('users')
         .select('*')
         .eq('id', request.userId)
         .single();
 
+      // Auto-create user row if not found (handles Google OAuth browser-flow
+      // users who bypass /auth/oauth and don't get a users row created)
       if (error || !user) {
-        return reply.status(404).send({
-          data: null,
-          error: { message: 'User not found', code: 'NOT_FOUND' },
-        });
+        const { data: created, error: createError } = await supabase
+          .from('users')
+          .upsert({
+            id: request.userId,
+            email: request.userEmail,
+            auth_provider: 'google',
+          }, { onConflict: 'id' })
+          .select()
+          .single();
+
+        if (createError || !created) {
+          return reply.status(404).send({
+            data: null,
+            error: { message: 'User not found', code: 'NOT_FOUND' },
+          });
+        }
+        user = created;
       }
 
       // Fetch preferences

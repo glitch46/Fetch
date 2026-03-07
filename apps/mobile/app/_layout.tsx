@@ -26,9 +26,7 @@ SplashScreen.preventAutoHideAsync();
 
 /**
  * Fetch user profile directly via fetch(), bypassing the axios interceptor.
- * The axios 401 handler calls supabase.auth.refreshSession() which acquires
- * a session lock. If this lock is held when the swipe deck calls api.get('/dogs'),
- * the request interceptor's getSession() blocks indefinitely, hanging the app.
+ * The backend auto-creates the user row if it doesn't exist (GET /me upserts).
  */
 async function fetchProfile(token: string) {
   const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/me`, {
@@ -93,21 +91,25 @@ export default function RootLayout() {
     // Listen for auth state changes (sign in, sign out, token refresh)
     const subscription = onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session) {
-        setSession(session);
-        setEmailVerified(!!session.user.email_confirmed_at);
-
-        // Fetch profile bypassing axios interceptor to avoid session lock contention
+        // Fetch profile BEFORE setting session to avoid AuthGuard race condition.
+        // If we set session first, AuthGuard fires with hasCompletedOnboarding=false
+        // and redirects to /preferences before fetchProfile can set it to true.
+        let profile = null;
         try {
-          const profile = await fetchProfile(session.access_token);
-          if (profile) {
-            setUser(profile as User);
-            if (profile.has_completed_onboarding) {
-              setHasCompletedOnboarding(true);
-            }
-          }
+          profile = await fetchProfile(session.access_token);
         } catch {
           // Profile not found — expected for new OAuth users
         }
+
+        // Now set all auth state at once so AuthGuard has complete info
+        if (profile) {
+          setUser(profile as User);
+          if (profile.has_completed_onboarding) {
+            setHasCompletedOnboarding(true);
+          }
+        }
+        setSession(session);
+        setEmailVerified(!!session.user.email_confirmed_at);
       } else if (event === 'SIGNED_OUT') {
         reset();
       } else if (event === 'TOKEN_REFRESHED' && session) {
