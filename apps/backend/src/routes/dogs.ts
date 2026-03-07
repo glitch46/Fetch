@@ -75,7 +75,7 @@ function dbRowToDog(
     prompts: (row.prompts as Dog['prompts']) || null,
     days_in_shelter: (row.days_in_shelter as number) ?? null,
     adoption_url: (row.petfinder_url as string) || null,
-    foster_url: 'https://www.austintexas.gov/page/foster-care-application',
+    foster_url: (row.petfinder_url as string) || null,
     last_synced_at: (row.last_synced_at as string) || null,
   };
 }
@@ -156,25 +156,30 @@ export async function dogsRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Sort: dogs with multiple photos first, then by match score descending.
-      // This ensures the swipe deck leads with richer, more engaging profiles.
+      // Sort: match score first (highest relevance), then multi-photo, then photo count, then longest-waiting.
+      // All dogs are returned regardless of score — unmatched dogs appear after matched ones.
       results.sort((a, b) => {
+        const aScore = a.match_score ?? 0;
+        const bScore = b.match_score ?? 0;
+
+        // Primary: match score descending
+        if (aScore !== bScore) return bScore - aScore;
+
         const aPhotos = a.photos?.length || 0;
         const bPhotos = b.photos?.length || 0;
         const aMulti = aPhotos > 1 ? 1 : 0;
         const bMulti = bPhotos > 1 ? 1 : 0;
 
-        // Primary: multi-photo dogs first
+        // Secondary: multi-photo dogs first
         if (aMulti !== bMulti) return bMulti - aMulti;
 
-        // Within multi-photo tier, more photos first
-        if (aMulti && bMulti && aPhotos !== bPhotos) return bPhotos - aPhotos;
+        // Tertiary: more photos first
+        if (aPhotos !== bPhotos) return bPhotos - aPhotos;
 
-        // Secondary: match score descending (null scores at the end)
-        if (a.match_score === null && b.match_score === null) return 0;
-        if (a.match_score === null) return 1;
-        if (b.match_score === null) return -1;
-        return b.match_score - a.match_score;
+        // Quaternary: longest-waiting first (earlier published_at)
+        const aDate = a.published_at || '';
+        const bDate = b.published_at || '';
+        return aDate.localeCompare(bDate);
       });
 
       const total = count || 0;

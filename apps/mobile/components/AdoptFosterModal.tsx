@@ -55,15 +55,39 @@ export default function AdoptFosterModal({
 
           {/* Action label */}
           <Text style={styles.heading}>
-            {action === 'adopt' ? 'Ready to Adopt?' : 'Ready to Foster?'}
+            {action === 'adopt' ? 'Ready to Adopt?' : 'Interested in Fostering?'}
           </Text>
 
           {/* Instructions */}
-          <Text style={styles.instructions}>
-            {action === 'adopt'
-              ? 'You will be taken to this dog\'s adoption listing where you can start the adoption process.'
-              : 'You will be taken to the foster application where you can start the process.'}
-          </Text>
+          {action === 'adopt' ? (
+            <Text style={styles.instructions}>
+              You'll be taken to {cleanText(dog.name)}'s profile where you can start the adoption process with their shelter.
+            </Text>
+          ) : (
+            <View style={styles.fosterSteps}>
+              <Text style={styles.instructions}>
+                Many shelters welcome foster families! Here's how to get started:
+              </Text>
+              <View style={styles.step}>
+                <View style={styles.stepNumber}><Text style={styles.stepNumberText}>1</Text></View>
+                <Text style={styles.stepText}>
+                  Visit {cleanText(dog.name)}'s profile and tap "Ask About Me" or contact the shelter
+                </Text>
+              </View>
+              <View style={styles.step}>
+                <View style={styles.stepNumber}><Text style={styles.stepNumberText}>2</Text></View>
+                <Text style={styles.stepText}>
+                  Let them know you're interested in fostering, not just adopting
+                </Text>
+              </View>
+              <View style={styles.step}>
+                <View style={styles.stepNumber}><Text style={styles.stepNumberText}>3</Text></View>
+                <Text style={styles.stepText}>
+                  The shelter will walk you through their foster process
+                </Text>
+              </View>
+            </View>
+          )}
 
           {/* Continue button */}
           <TouchableOpacity
@@ -71,7 +95,7 @@ export default function AdoptFosterModal({
             onPress={onContinue}
           >
             <Text style={styles.buttonText}>
-              {action === 'adopt' ? 'View Adoption Listing' : 'Open Foster Application'}
+              {action === 'adopt' ? 'View Adoption Listing' : 'View Profile & Inquire'}
             </Text>
             <Ionicons name="open-outline" size={18} color="#fff" />
           </TouchableOpacity>
@@ -135,8 +159,39 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
-    marginBottom: 20,
+    marginBottom: 16,
     paddingHorizontal: 8,
+  },
+  fosterSteps: {
+    width: '100%',
+    marginBottom: 20,
+  },
+  step: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginTop: 10,
+  },
+  stepNumber: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.secondary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 1,
+  },
+  stepNumberText: {
+    color: '#fff',
+    fontSize: 12,
+    fontFamily: 'Nunito_700Bold',
+  },
+  stepText: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: 'Nunito_400Regular',
+    color: colors.text,
+    lineHeight: 20,
   },
   button: {
     width: '100%',

@@ -1,7 +1,7 @@
 // Preferences screen — owned by Mobile Agent (implementation)
 // Full-screen onboarding step with selectable preference chips
 
-import { useEffect } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -10,48 +10,51 @@ import {
   TouchableOpacity,
   Dimensions,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import { usePreferencesStore } from '../store/usePreferencesStore';
+import { useAuthStore } from '../store/useAuthStore';
 import { PREFERENCE_OPTIONS } from '../constants/preferences';
-import api from '../lib/api';
+import { supabase } from '../lib/supabase';
 import { colors } from '../constants/colors';
 import type { PreferenceKey } from '@fetch/shared';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
+/**
+ * Save preferences directly via fetch, bypassing the axios interceptor.
+ * The axios 401 handler can acquire a Supabase session lock that blocks
+ * concurrent requests (like the dogs fetch on the swipe deck).
+ */
+async function savePreferencesDirectly(prefs: PreferenceKey[]) {
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) return;
+
+    await fetch(`${process.env.EXPO_PUBLIC_API_URL}/me/preferences`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ preferences: prefs }),
+    });
+  } catch {
+    // Best-effort save — preferences are in local store regardless
+  }
+}
+
 export default function PreferencesScreen() {
-  const router = useRouter();
-  const { preferences, togglePreference, setPreferences, setLoading } = usePreferencesStore();
+  const { preferences, togglePreference } = usePreferencesStore();
 
-  useEffect(() => {
-    async function loadPreferences() {
-      try {
-        const { data: response } = await api.get('/me/preferences');
-        if (response?.data?.preferences) {
-          setPreferences(response.data.preferences);
-        }
-      } catch {
-        // Use whatever is in store
-      }
-    }
-    loadPreferences();
-  }, []);
-
-  async function handleSave() {
-    setLoading(true);
-    try {
-      await api.put('/me/preferences', { preferences });
-      router.back();
-    } catch {
-      // Still navigate back — preferences are saved locally
-      router.back();
-    } finally {
-      setLoading(false);
-    }
+  function handleSave() {
+    useAuthStore.getState().setHasCompletedOnboarding(true);
+    // Fire-and-forget — doesn't block navigation or interfere with session
+    savePreferencesDirectly(preferences as PreferenceKey[]);
   }
 
   function handleSkip() {
-    router.back();
+    useAuthStore.getState().setHasCompletedOnboarding(true);
+    savePreferencesDirectly([] as PreferenceKey[]);
   }
 
   return (

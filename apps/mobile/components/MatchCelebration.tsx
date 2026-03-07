@@ -33,11 +33,10 @@ export default function MatchCelebration() {
       // Non-blocking
     }
 
-    const url = action === 'adopt' ? matchedDog!.adoption_url : matchedDog!.foster_url;
+    // Both adopt and foster go to the dog's Petfinder profile
+    const url = matchedDog!.adoption_url || matchedDog!.petfinder_url;
     if (url) {
       await WebBrowser.openBrowserAsync(url);
-    } else if (matchedDog!.petfinder_url) {
-      await WebBrowser.openBrowserAsync(matchedDog!.petfinder_url);
     }
 
     dismissMatch();

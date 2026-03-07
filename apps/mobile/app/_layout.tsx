@@ -7,7 +7,6 @@ import { useAuthStore } from '../store/useAuthStore';
 import { onAuthStateChange, getSession } from '../lib/auth';
 import AuthGuard from '../components/AuthGuard';
 import { supabase } from '../lib/supabase';
-import api from '../lib/api';
 import type { User } from '@fetch/shared';
 import {
   useFonts,
@@ -17,12 +16,31 @@ import {
   Nunito_800ExtraBold,
 } from '@expo-google-fonts/nunito';
 import * as SplashScreen from 'expo-splash-screen';
+import * as WebBrowser from 'expo-web-browser';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
+// Must run before router handles any URLs — intercepts OAuth callback redirects
+WebBrowser.maybeCompleteAuthSession();
 
 SplashScreen.preventAutoHideAsync();
 
+/**
+ * Fetch user profile directly via fetch(), bypassing the axios interceptor.
+ * The axios 401 handler calls supabase.auth.refreshSession() which acquires
+ * a session lock. If this lock is held when the swipe deck calls api.get('/dogs'),
+ * the request interceptor's getSession() blocks indefinitely, hanging the app.
+ */
+async function fetchProfile(token: string) {
+  const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return null;
+  const json = await res.json();
+  return json?.data || null;
+}
+
 export default function RootLayout() {
-  const { setSession, setUser, setLoading, setEmailVerified, reset } = useAuthStore();
+  const { setSession, setUser, setLoading, setEmailVerified, setHasCompletedOnboarding, reset } = useAuthStore();
 
   const [fontsLoaded] = useFonts({
     Nunito_400Regular,
@@ -49,11 +67,14 @@ export default function RootLayout() {
           setSession(activeSession);
           setEmailVerified(!!activeSession.user.email_confirmed_at);
 
-          // Fetch the full user profile from the backend
+          // Fetch the full user profile from the backend (bypasses axios interceptor)
           try {
-            const { data: response } = await api.get('/me');
-            if (response?.data) {
-              setUser(response.data as User);
+            const profile = await fetchProfile(activeSession.access_token);
+            if (profile) {
+              setUser(profile as User);
+              if (profile.has_completed_onboarding) {
+                setHasCompletedOnboarding(true);
+              }
             }
           } catch {
             // Profile fetch failed — user may not have a profile row yet
@@ -75,10 +96,14 @@ export default function RootLayout() {
         setSession(session);
         setEmailVerified(!!session.user.email_confirmed_at);
 
+        // Fetch profile bypassing axios interceptor to avoid session lock contention
         try {
-          const { data: response } = await api.get('/me');
-          if (response?.data) {
-            setUser(response.data as User);
+          const profile = await fetchProfile(session.access_token);
+          if (profile) {
+            setUser(profile as User);
+            if (profile.has_completed_onboarding) {
+              setHasCompletedOnboarding(true);
+            }
           }
         } catch {
           // Profile not found — expected for new OAuth users
@@ -106,9 +131,10 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthGuard>
         <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="index" />
           <Stack.Screen name="(auth)" />
           <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="preferences" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="preferences" />
           <Stack.Screen name="dog/[id]" options={{ presentation: 'modal' }} />
         </Stack>
       </AuthGuard>

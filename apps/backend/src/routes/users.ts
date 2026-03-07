@@ -55,6 +55,7 @@ export async function usersRoutes(fastify: FastifyInstance) {
           notification_urgent_dogs: user.notification_urgent_dogs,
           created_at: user.created_at,
           preferences: prefsRow?.preferences || [],
+          has_completed_onboarding: prefsRow !== null,
         },
         error: null,
       });

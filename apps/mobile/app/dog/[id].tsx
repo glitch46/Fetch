@@ -107,14 +107,8 @@ export default function DogProfileScreen() {
       // Non-blocking
     }
 
-    let url: string | null = null;
-    if (action === 'adopt') {
-      // Adopt: open the dog's adoption listing
-      url = dog!.adoption_url || dog!.petfinder_url || null;
-    } else {
-      // Foster: open AAC foster application
-      url = dog!.foster_url || 'https://www.austintexas.gov/page/foster-care-application';
-    }
+    // Both adopt and foster go to the dog's Petfinder profile
+    const url = dog!.adoption_url || dog!.petfinder_url || null;
 
     if (url) {
       await WebBrowser.openBrowserAsync(url);
@@ -231,7 +225,7 @@ export default function DogProfileScreen() {
           )}
           {dog.last_synced_at && (
             <DetailRow
-              icon="checkmark-shield-outline"
+              icon="shield-checkmark-outline"
               label="Last Verified"
               value={formatLastVerified(dog.last_synced_at)}
             />

@@ -1,7 +1,7 @@
 // Liked Dogs screen — owned by Mobile Agent (implementation)
 // Grid view of all right-swiped dogs with availability status
 
-import { useEffect, useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useDogsStore } from '../../store/useDogsStore';
 import { colors } from '../../constants/colors';
@@ -26,14 +27,22 @@ const CARD_WIDTH = (SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP) / 2;
 
 export default function LikedDogsScreen() {
   const router = useRouter();
-  const { likedDogs, isLoading, fetchLikedDogs } = useDogsStore();
+  const { likedDogs, fetchLikedDogs } = useDogsStore();
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    fetchLikedDogs();
-  }, []);
+  // Fetch liked dogs when tab becomes visible (not on mount)
+  // This prevents a race where the initial fetch returns empty
+  // and overwrites dogs that were locally added via addLikedDog
+  useFocusEffect(
+    useCallback(() => {
+      fetchLikedDogs();
+    }, [])
+  );
 
-  const onRefresh = useCallback(() => {
-    fetchLikedDogs();
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchLikedDogs();
+    setRefreshing(false);
   }, []);
 
   function renderCard({ item }: { item: Dog }) {
@@ -74,7 +83,7 @@ export default function LikedDogsScreen() {
     );
   }
 
-  if (likedDogs.length === 0 && !isLoading) {
+  if (likedDogs.length === 0 && !refreshing) {
     return (
       <View style={styles.emptyContainer}>
         <Text style={styles.emptyEmoji}>🐾</Text>
@@ -107,7 +116,7 @@ export default function LikedDogsScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={isLoading}
+            refreshing={refreshing}
             onRefresh={onRefresh}
             tintColor={colors.primary}
           />
