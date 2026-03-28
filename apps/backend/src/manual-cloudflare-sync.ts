@@ -38,7 +38,9 @@ if (!process.env.CLOUDFLARE_ACCOUNT_ID || !process.env.CLOUDFLARE_API_TOKEN) {
 async function main() {
   const limit = process.argv[2] ? parseInt(process.argv[2], 10) : 10;
 
-  if (process.env.CLOUDFLARE_ABORT_ON_429 !== '1') {
+  // Allow CLOUDFLARE_ABORT_ON_429 to be set via env or CLI flag
+  // When not set, the scraper will retry on 429s instead of aborting
+  if (process.argv.includes('--abort-on-429')) {
     process.env.CLOUDFLARE_ABORT_ON_429 = '1';
   }
   

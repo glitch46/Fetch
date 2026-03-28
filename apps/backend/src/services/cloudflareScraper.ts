@@ -35,8 +35,8 @@ const TARGET_ZIP = '78721';
 const TARGET_RADIUS_MILES = 50;
 const TARGET_COORDS = { lat: 30.2726, lon: -97.6836 }; // Austin, TX 78721
 const geocodeCache = new Map<string, { lat: number; lon: number } | null>();
-const SEARCH_PAGE_DELAY_MS = 18000;
-const PROFILE_DELAY_MS = 18000;
+const SEARCH_PAGE_DELAY_MS = 22000;
+const PROFILE_DELAY_MS = 22000;
 const AUSTIN_METRO_LOCATIONS = new Set([
   'AUSTIN, TX',
   'ROUND ROCK, TX',
@@ -901,13 +901,13 @@ async function fetchSearchPage(
     }
 
     if (axios.isAxiosError(error) && error.response?.status === 429) {
-      const rawRetry = Number(error.response.headers['retry-after'] || 15);
-      const retryAfter = Math.min(rawRetry, 60);
+      const rawRetry = Number(error.response.headers['retry-after'] || 60);
+      const retryAfter = Math.max(rawRetry, 60);
       if (attempt >= 4) {
         console.error(`[CLOUDFLARE] Search page ${page} rate limit retries exhausted (${attempt + 1} attempts)`);
         return { dogs: [], hadCards: false };
       }
-      console.warn(`[CLOUDFLARE] Search page ${page} rate limited (raw retry-after=${rawRetry}). Waiting ${retryAfter}s (attempt ${attempt + 1}/5)...`);
+      console.warn(`[CLOUDFLARE] Search page ${page} rate limited. Waiting ${retryAfter}s (attempt ${attempt + 1}/5)...`);
       await sleep(retryAfter * 1000);
       return fetchSearchPage(endpoint, page, attempt + 1);
     }
@@ -932,7 +932,16 @@ async function searchAdoptapetDogs(location: string = 'Austin, TX', limit: numbe
   let consecutiveEmptyPages = 0;
 
   for (let page = 1; page <= maxPages && collected.length < limit; page += 1) {
-    const pageResult = await fetchSearchPage(endpoint, page);
+    let pageResult: SearchPageResult;
+    try {
+      pageResult = await fetchSearchPage(endpoint, page);
+    } catch (err) {
+      if (err instanceof Error && err.message === 'CLOUDFLARE_RATE_LIMIT_ABORT') {
+        console.warn(`[CLOUDFLARE] Rate limit hit during search — returning ${collected.length} candidates collected so far`);
+        break;
+      }
+      throw err;
+    }
     if (!pageResult.hadCards) {
       consecutiveEmptyPages += 1;
       if (consecutiveEmptyPages >= 5) {
@@ -979,16 +988,24 @@ export async function fetchDogsFromAdoptapet(limit: number = 50): Promise<RawDog
 
     console.log(`[CLOUDFLARE] Scraping ${result.name} from ${result.url}`);
     
-    const dog = await scrapeDogProfile(result.url, result.name);
-    if (dog) {
-      dogs.push(dog);
-      console.log(`[CLOUDFLARE] Successfully scraped ${dog.name}`);
+    try {
+      const dog = await scrapeDogProfile(result.url, result.name);
+      if (dog) {
+        dogs.push(dog);
+        console.log(`[CLOUDFLARE] Successfully scraped ${dog.name} (${dogs.length}/${limit})`);
+      }
+    } catch (err) {
+      if (err instanceof Error && err.message === 'CLOUDFLARE_RATE_LIMIT_ABORT') {
+        console.warn(`[CLOUDFLARE] Rate limit hit — returning ${dogs.length} dogs collected so far`);
+        break;
+      }
+      throw err;
     }
     
     await sleep(withJitter(PROFILE_DELAY_MS));
   }
 
-  console.log(`[CLOUDFLARE] Scraped ${dogs.length} dogs`);
+  console.log(`[CLOUDFLARE] Scraped ${dogs.length} dogs total`);
   return dogs.slice(0, limit);
 }
 
