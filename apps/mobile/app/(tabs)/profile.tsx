@@ -46,7 +46,7 @@ export default function ProfileScreen() {
       <View style={styles.menuSection}>
         <TouchableOpacity
           style={styles.menuRow}
-          onPress={() => router.push('/preferences')}
+          onPress={() => router.push('/preferences?edit=true')}
         >
           <Ionicons name="options-outline" size={22} color={colors.secondary} />
           <Text style={styles.menuLabel}>Edit Preferences</Text>

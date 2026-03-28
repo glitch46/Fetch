@@ -73,9 +73,9 @@ function dbRowToDog(
     match_score: matchScore,
     matched_preferences: matchedPreferences,
     prompts: (row.prompts as Dog['prompts']) || null,
-    days_in_shelter: (row.days_in_shelter as number) ?? null,
+days_in_shelter: (row.days_in_shelter as number) ?? null,
     adoption_url: (row.petfinder_url as string) || null,
-    foster_url: (row.petfinder_url as string) || null,
+    foster_url: 'https://www.austintexas.gov/page/foster-care-application',
     last_synced_at: (row.last_synced_at as string) || null,
   };
 }
@@ -156,13 +156,26 @@ export async function dogsRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Sort: match score first (highest relevance), then multi-photo, then photo count, then longest-waiting.
-      // All dogs are returned regardless of score — unmatched dogs appear after matched ones.
+      // Sort order:
+      // 1) Dogs synced very recently (helps surface fresh test/sync results)
+      // 2) Match score (highest relevance)
+      // 3) Multi-photo / photo richness
+      // 4) Longest-waiting fallback
       results.sort((a, b) => {
+        const recentWindowMs = 2 * 60 * 60 * 1000;
+        const aSyncedAt = a.last_synced_at ? new Date(a.last_synced_at).getTime() : 0;
+        const bSyncedAt = b.last_synced_at ? new Date(b.last_synced_at).getTime() : 0;
+        const aIsRecent = aSyncedAt > 0 && Date.now() - aSyncedAt <= recentWindowMs ? 1 : 0;
+        const bIsRecent = bSyncedAt > 0 && Date.now() - bSyncedAt <= recentWindowMs ? 1 : 0;
+
+        if (aIsRecent !== bIsRecent) return bIsRecent - aIsRecent;
+
+        if (aSyncedAt !== bSyncedAt) return bSyncedAt - aSyncedAt;
+
         const aScore = a.match_score ?? 0;
         const bScore = b.match_score ?? 0;
 
-        // Primary: match score descending
+        // Match score descending
         if (aScore !== bScore) return bScore - aScore;
 
         const aPhotos = a.photos?.length || 0;
@@ -170,10 +183,10 @@ export async function dogsRoutes(fastify: FastifyInstance) {
         const aMulti = aPhotos > 1 ? 1 : 0;
         const bMulti = bPhotos > 1 ? 1 : 0;
 
-        // Secondary: multi-photo dogs first
+        // Multi-photo dogs first
         if (aMulti !== bMulti) return bMulti - aMulti;
 
-        // Tertiary: more photos first
+        // More photos first
         if (aPhotos !== bPhotos) return bPhotos - aPhotos;
 
         // Quaternary: longest-waiting first (earlier published_at)

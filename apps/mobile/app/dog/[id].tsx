@@ -176,7 +176,7 @@ export default function DogProfileScreen() {
               {cleanText(dog.breed_primary) || 'Mixed Breed'}
             </Text>
           </View>
-          {dog.match_score && (
+          {dog.match_score !== null && dog.match_score >= 0 && (
             <View style={styles.matchBadge}>
               <Text style={styles.matchBadgeText}>{dog.match_score}% Match 🐾</Text>
             </View>

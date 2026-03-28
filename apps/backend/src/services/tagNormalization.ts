@@ -5,6 +5,62 @@
 
 import type { PreferenceKey, Dog } from '@fetch/shared';
 
+const VALID_PREFERENCE_KEYS = new Set<PreferenceKey>([
+  'active_lifestyle',
+  'experienced_with_cats',
+  'cat_selective',
+  'cuddler',
+  'experienced_with_dogs',
+  'dog_selective',
+  'housetrained',
+  'independent',
+  'knows_tricks',
+  'laid_back',
+  'leash_trained',
+  'loves_car_rides',
+  'loves_food_and_treats',
+  'loves_the_water',
+  'medium_energy',
+  'experienced_with_older_kids',
+  'playful',
+  'experienced_with_young_kids',
+  'foster_eligible',
+  'indoor_only',
+  'indoor_outdoor',
+  'long_term_resident',
+  'quiet_home',
+]);
+
+interface BioRule {
+  key: PreferenceKey;
+  patterns: RegExp[];
+}
+
+const BIO_KEYWORD_RULES: BioRule[] = [
+  { key: 'active_lifestyle', patterns: [/\b(active|energetic|high energy|loves to run|athletic)\b/i] },
+  { key: 'laid_back', patterns: [/\b(calm|mellow|laid back|easygoing|gentle)\b/i] },
+  { key: 'medium_energy', patterns: [/\b(medium energy|moderate energy|balanced energy)\b/i] },
+  { key: 'playful', patterns: [/\b(playful|loves to play|toy lover|loves toys)\b/i] },
+  { key: 'cuddler', patterns: [/\b(cuddly|cuddler|snuggly|affectionate|lap dog)\b/i] },
+  { key: 'independent', patterns: [/\b(independent|self-sufficient)\b/i] },
+  { key: 'housetrained', patterns: [/\b(housetrained|house trained|potty trained|crate trained)\b/i] },
+  { key: 'leash_trained', patterns: [/\b(leash trained|walks well on leash|good on leash)\b/i] },
+  { key: 'knows_tricks', patterns: [/\b(knows tricks|knows commands|sit|stay|trained)\b/i] },
+  { key: 'experienced_with_dogs', patterns: [/\b(good with dogs|dog friendly|gets along with dogs)\b/i] },
+  { key: 'dog_selective', patterns: [/\b(dog selective|prefers to be the only dog)\b/i] },
+  { key: 'experienced_with_cats', patterns: [/\b(good with cats|cat friendly|gets along with cats)\b/i] },
+  { key: 'cat_selective', patterns: [/\b(cat selective|no cats|should not live with cats)\b/i] },
+  { key: 'experienced_with_young_kids', patterns: [/\b(good with young kids|good with children|kid friendly)\b/i] },
+  { key: 'experienced_with_older_kids', patterns: [/\b(good with older kids|best with older kids)\b/i] },
+  { key: 'loves_car_rides', patterns: [/\b(loves car rides|great in the car|good in car)\b/i] },
+  { key: 'loves_food_and_treats', patterns: [/\b(food motivated|treat motivated|loves treats)\b/i] },
+  { key: 'loves_the_water', patterns: [/\b(loves water|swimmer|enjoys swimming)\b/i] },
+  { key: 'foster_eligible', patterns: [/\b(foster eligible|needs foster|foster home)\b/i] },
+  { key: 'indoor_only', patterns: [/\b(indoor only|inside only|apartment dog)\b/i] },
+  { key: 'indoor_outdoor', patterns: [/\b(indoor\/outdoor|indoor outdoor)\b/i] },
+  { key: 'quiet_home', patterns: [/\b(quiet home|needs a quiet home|shy|timid)\b/i] },
+];
+
 // ── SCRAPED_TAG_MAP ──────────────────────────
 // Used by dogSync to normalize raw tag strings from adopets.com into canonical tags.
 // Case-insensitive matching; keys are lowercase.
@@ -64,16 +120,45 @@ export function normalizeRawTags(rawTags: string[]): string[] {
 
   for (const tag of rawTags) {
     const lower = tag.toLowerCase().trim();
+
+    if (VALID_PREFERENCE_KEYS.has(lower as PreferenceKey)) {
+      normalized.add(lower);
+      continue;
+    }
+
     const canonical = SCRAPED_TAG_MAP[lower];
     if (canonical) {
       normalized.add(canonical);
-    } else {
-      // Keep unrecognized tags as lowercase for display
-      normalized.add(lower);
     }
   }
 
   return Array.from(normalized);
+}
+
+export function filterToPreferenceTags(tags: string[]): PreferenceKey[] {
+  const filtered = new Set<PreferenceKey>();
+
+  for (const tag of tags) {
+    const normalized = tag.toLowerCase().trim();
+    if (VALID_PREFERENCE_KEYS.has(normalized as PreferenceKey)) {
+      filtered.add(normalized as PreferenceKey);
+    }
+  }
+
+  return Array.from(filtered);
+}
+
+export function inferPreferenceTagsFromText(text: string | null | undefined): PreferenceKey[] {
+  if (!text) return [];
+
+  const inferred = new Set<PreferenceKey>();
+  for (const rule of BIO_KEYWORD_RULES) {
+    if (rule.patterns.some((pattern) => pattern.test(text))) {
+      inferred.add(rule.key);
+    }
+  }
+
+  return Array.from(inferred);
 }
 
 // ── TAG_MAP (Preference Checkers) ──────────────────────────

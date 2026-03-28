@@ -7,7 +7,6 @@ import { supabase } from './supabase';
 import { useAuthStore } from '../store/useAuthStore';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
-import { makeRedirectUri } from 'expo-auth-session';
 import type { Session, AuthChangeEvent } from '@supabase/supabase-js';
 
 // OAuth redirect URI — use no path so the router doesn't try to match it as a route.
@@ -16,6 +15,20 @@ import type { Session, AuthChangeEvent } from '@supabase/supabase-js';
 const redirectUri = AuthSession.makeRedirectUri();
 
 console.log('[AUTH] Redirect URI:', redirectUri);
+
+async function waitForSession(maxMs = 20000): Promise<Session | null> {
+  const start = Date.now();
+
+  while (Date.now() - start < maxMs) {
+    const { data } = await supabase.auth.getSession();
+    if (data.session) {
+      return data.session;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+
+  return null;
+}
 
 // ── Email Authentication ──────────────────────────────
 
@@ -88,10 +101,12 @@ export async function signInWithGoogle() {
   if (!data.url) throw new Error('No OAuth URL returned');
 
   console.log('[AUTH] OAuth URL:', data.url);
-  const result = await WebBrowser.openAuthSessionAsync(
-    data.url,
-    redirectUri,
-  );
+  const result = await Promise.race([
+    WebBrowser.openAuthSessionAsync(data.url, redirectUri),
+    new Promise<{ type: 'timeout'; url?: string }>((resolve) =>
+      setTimeout(() => resolve({ type: 'timeout' }), 25000)
+    ),
+  ]);
   console.log('[AUTH] Browser result type:', result.type);
 
   if (result.type === 'success') {
@@ -115,8 +130,18 @@ export async function signInWithGoogle() {
     }
   }
 
-  // Browser was dismissed or redirect wasn't captured cleanly.
-  // The OAuth may have still completed server-side — check for a session.
+  // Browser was dismissed, timed out, or redirect wasn't captured cleanly.
+  // OAuth may still have completed; poll for the session briefly.
+  const waitedSession = await waitForSession();
+  if (waitedSession) {
+    console.log('[AUTH] Recovered session by polling after auth session');
+    const store = useAuthStore.getState();
+    store.setSession(waitedSession);
+    store.setEmailVerified(true);
+    return { session: waitedSession, user: waitedSession.user };
+  }
+
+  // Final fallback: check immediately for current session.
   const { data: existingSession } = await supabase.auth.getSession();
   if (existingSession.session) {
     console.log('[AUTH] Found existing session after browser dismiss');
@@ -157,13 +182,22 @@ export async function signInWithFacebook() {
   if (!data.url) throw new Error('No OAuth URL returned');
 
   // Open the OAuth URL in the system browser
-  const result = await WebBrowser.openAuthSessionAsync(
-    data.url,
-    redirectUri,
-  );
+  const result = await Promise.race([
+    WebBrowser.openAuthSessionAsync(data.url, redirectUri),
+    new Promise<{ type: 'timeout'; url?: string }>((resolve) =>
+      setTimeout(() => resolve({ type: 'timeout' }), 25000)
+    ),
+  ]);
 
   if (result.type !== 'success') {
-    throw new Error('OAuth flow was cancelled or failed');
+    const waitedSession = await waitForSession();
+    if (waitedSession) {
+      const store = useAuthStore.getState();
+      store.setSession(waitedSession);
+      store.setEmailVerified(true);
+      return { session: waitedSession, user: waitedSession.user };
+    }
+    throw new Error('OAuth flow was cancelled, timed out, or failed');
   }
 
   // Extract the tokens from the redirect URL

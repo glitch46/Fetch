@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   Dimensions,
 } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { usePreferencesStore } from '../store/usePreferencesStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { PREFERENCE_OPTIONS } from '../constants/preferences';
@@ -44,17 +45,22 @@ async function savePreferencesDirectly(prefs: PreferenceKey[]) {
 }
 
 export default function PreferencesScreen() {
+  const router = useRouter();
+  const params = useLocalSearchParams<{ edit?: string }>();
+  const isEditMode = params.edit === 'true';
   const { preferences, togglePreference } = usePreferencesStore();
 
   function handleSave() {
     useAuthStore.getState().setHasCompletedOnboarding(true);
     // Fire-and-forget — doesn't block navigation or interfere with session
     savePreferencesDirectly(preferences as PreferenceKey[]);
+    router.replace(isEditMode ? '/(tabs)/profile' : '/(tabs)');
   }
 
   function handleSkip() {
     useAuthStore.getState().setHasCompletedOnboarding(true);
     savePreferencesDirectly([] as PreferenceKey[]);
+    router.replace(isEditMode ? '/(tabs)/profile' : '/(tabs)');
   }
 
   return (

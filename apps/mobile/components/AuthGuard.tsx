@@ -3,7 +3,7 @@
 
 import { type ReactNode, useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { useRouter, useSegments } from 'expo-router';
+import { useGlobalSearchParams, useRouter, useSegments } from 'expo-router';
 import { useAuthStore } from '../store/useAuthStore';
 import { colors } from '../constants/colors';
 
@@ -21,6 +21,7 @@ interface AuthGuardProps {
 export default function AuthGuard({ children }: AuthGuardProps) {
   const { session, isLoading, emailVerified, hasCompletedOnboarding } = useAuthStore();
   const segments = useSegments();
+  const params = useGlobalSearchParams<{ edit?: string }>();
   const router = useRouter();
 
   useEffect(() => {
@@ -29,6 +30,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     const inAuthGroup = segments[0] === '(auth)';
     const inTabs = segments[0] === '(tabs)';
     const onPreferences = segments[0] === 'preferences';
+    const isEditingPreferences = params.edit === 'true';
     const onDogDetail = segments[0] === 'dog';
     const onRootIndex = !segments[0] || segments[0] === 'index';
     const isAuthenticated = session !== null;
@@ -48,14 +50,14 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     } else if (isAuthenticated && emailVerified && inAuthGroup) {
       // User is signed in, verified, and on an auth screen — redirect away
       router.replace(hasCompletedOnboarding ? '/(tabs)' : '/preferences');
-    } else if (isAuthenticated && emailVerified && hasCompletedOnboarding && onPreferences) {
+    } else if (isAuthenticated && emailVerified && hasCompletedOnboarding && onPreferences && !isEditingPreferences) {
       // Onboarding already done — redirect from preferences to tabs
       router.replace('/(tabs)');
     } else if (isAuthenticated && emailVerified && !hasCompletedOnboarding && inTabs) {
       // User is on tabs but hasn't completed onboarding — show preferences
       router.replace('/preferences');
     }
-  }, [session, isLoading, emailVerified, hasCompletedOnboarding, segments]);
+  }, [session, isLoading, emailVerified, hasCompletedOnboarding, segments, params.edit]);
 
   if (isLoading) {
     return (
