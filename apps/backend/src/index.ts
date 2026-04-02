@@ -1,17 +1,10 @@
-// Fastify server entry point — owned by Architect Agent (scaffold), extended by Backend Agent (routes)
-// Registers all route plugins, CORS, JWT, and starts the cron scheduler
-
-// IMPORTANT: dotenv must be loaded BEFORE any module that reads process.env.
-// ES module imports are hoisted, so we use dynamic imports for everything that
-// depends on env vars (routes, cron, etc.) to guarantee load order.
+// Fastify server entry point
+// Registers all route plugins, CORS, and JWT
 
 import dotenv from 'dotenv';
 import { resolve } from 'path';
 import { existsSync } from 'fs';
 
-// Load .env from the monorepo root.
-// When running via `npm run dev` from apps/backend/, cwd is apps/backend/.
-// The .env lives at the monorepo root (two levels up).
 const candidates = [
   resolve(process.cwd(), '.env'),
   resolve(process.cwd(), '..', '..', '.env'),
@@ -24,7 +17,6 @@ if (envPath) {
   console.warn('[WARN] No .env file found. Checked:', candidates.join(', '));
 }
 
-// Now that env vars are loaded, dynamically import everything that depends on them.
 async function main() {
   const Fastify = (await import('fastify')).default;
   const cors = (await import('@fastify/cors')).default;
@@ -43,7 +35,6 @@ async function main() {
   await fastify.register(cors, { origin: true });
   await fastify.register(jwt, { secret: process.env.JWT_SECRET! });
 
-  // Register routes
   await fastify.register(authRoutes, { prefix: '/auth' });
   await fastify.register(dogsRoutes, { prefix: '/dogs' });
   await fastify.register(swipesRoutes, { prefix: '/swipes' });
@@ -51,10 +42,9 @@ async function main() {
   await fastify.register(usersRoutes, { prefix: '/me' });
   await fastify.register(notificationsRoutes, { prefix: '/notifications' });
 
-  // Health check
   fastify.get('/health', async () => ({ status: 'ok' }));
 
-  // Start cron jobs
+  // Start the 12-hour dog sync cron job
   startCronJobs();
 
   await fastify.listen({ port: PORT, host: '0.0.0.0' });

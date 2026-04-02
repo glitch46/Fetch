@@ -3,7 +3,7 @@
 
 import { type ReactNode, useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { useRouter, useSegments } from 'expo-router';
+import { useGlobalSearchParams, useRouter, useSegments } from 'expo-router';
 import { useAuthStore } from '../store/useAuthStore';
 import { colors } from '../constants/colors';
 
@@ -19,14 +19,20 @@ interface AuthGuardProps {
  * - If authenticated and verified: allow access to protected routes
  */
 export default function AuthGuard({ children }: AuthGuardProps) {
-  const { session, isLoading, emailVerified } = useAuthStore();
+  const { session, isLoading, emailVerified, hasCompletedOnboarding } = useAuthStore();
   const segments = useSegments();
+  const params = useGlobalSearchParams<{ edit?: string }>();
   const router = useRouter();
 
   useEffect(() => {
     if (isLoading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    const inTabs = segments[0] === '(tabs)';
+    const onPreferences = segments[0] === 'preferences';
+    const isEditingPreferences = params.edit === 'true';
+    const onDogDetail = segments[0] === 'dog';
+    const onRootIndex = !segments[0] || segments[0] === 'index';
     const isAuthenticated = session !== null;
 
     if (!isAuthenticated && !inAuthGroup) {
@@ -34,17 +40,24 @@ export default function AuthGuard({ children }: AuthGuardProps) {
       router.replace('/(auth)/login');
     } else if (isAuthenticated && !emailVerified && (segments as string[])[1] !== 'verify-email') {
       // User is signed in but email is not verified
-      // Allow them to stay in auth group but redirect to verify-email
-      // Only redirect if they're not already on the verify-email screen
       const isOnVerifyScreen = inAuthGroup && (segments as string[])[1] === 'verify-email';
       if (!isOnVerifyScreen) {
         router.replace('/(auth)/verify-email');
       }
-    } else if (isAuthenticated && emailVerified && inAuthGroup) {
-      // User is signed in, verified, and on an auth screen — redirect to main app
+    } else if (isAuthenticated && emailVerified && onRootIndex) {
+      // Authenticated user on root index — go to tabs (AuthGuard will re-check from there)
       router.replace('/(tabs)');
+    } else if (isAuthenticated && emailVerified && inAuthGroup) {
+      // User is signed in, verified, and on an auth screen — redirect away
+      router.replace(hasCompletedOnboarding ? '/(tabs)' : '/preferences');
+    } else if (isAuthenticated && emailVerified && hasCompletedOnboarding && onPreferences && !isEditingPreferences) {
+      // Onboarding already done — redirect from preferences to tabs
+      router.replace('/(tabs)');
+    } else if (isAuthenticated && emailVerified && !hasCompletedOnboarding && inTabs) {
+      // User is on tabs but hasn't completed onboarding — show preferences
+      router.replace('/preferences');
     }
-  }, [session, isLoading, emailVerified, segments]);
+  }, [session, isLoading, emailVerified, hasCompletedOnboarding, segments, params.edit]);
 
   if (isLoading) {
     return (

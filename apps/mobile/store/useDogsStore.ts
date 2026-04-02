@@ -51,7 +51,10 @@ export const useDogsStore = create<DogsState>((set, get) => ({
         name: dog.name.replace(/^\*+/, '').trim(),
         photos: typeof dog.photos === 'string' ? JSON.parse(dog.photos) : dog.photos,
       }));
-      set({ likedDogs: items });
+      // Merge: keep locally-added dogs that haven't been saved to backend yet
+      const backendIds = new Set(items.map((d) => d.id));
+      const localOnly = get().likedDogs.filter((d) => !backendIds.has(d.id));
+      set({ likedDogs: [...items, ...localOnly] });
     } catch (err) {
       console.error('[DOGS] Failed to fetch liked dogs:', err);
     } finally {

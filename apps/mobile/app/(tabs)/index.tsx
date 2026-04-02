@@ -98,16 +98,14 @@ export default function SwipeDeckScreen() {
       // Then advance the index
       setCurrentIndex(currentIndex + 1);
 
-      try {
-        await api.post('/swipes', { dog_id: dog.id, direction });
-      } catch {
-        // Non-blocking
-      }
-
+      // Add to local store immediately so liked tab always has the dog
       if (direction === 'right') {
         addLikedDog(dog);
         triggerMatch(dog);
       }
+
+      // Save to backend in background — don't block on this
+      api.post('/swipes', { dog_id: dog.id, direction }).catch(() => {});
     },
     [dogs, currentIndex]
   );

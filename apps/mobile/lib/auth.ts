@@ -7,17 +7,28 @@ import { supabase } from './supabase';
 import { useAuthStore } from '../store/useAuthStore';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
-import { makeRedirectUri } from 'expo-auth-session';
 import type { Session, AuthChangeEvent } from '@supabase/supabase-js';
 
-// Ensure web browser auth sessions are completed on return
-WebBrowser.maybeCompleteAuthSession();
+// OAuth redirect URI — use no path so the router doesn't try to match it as a route.
+// Expo Go: exp://192.168.x.x:8081
+// Dev build / standalone: fetch://
+const redirectUri = AuthSession.makeRedirectUri();
 
-// OAuth redirect URI for deep linking (fetch://auth/callback)
-const redirectUri = makeRedirectUri({
-  scheme: 'fetch',
-  path: 'auth/callback',
-});
+console.log('[AUTH] Redirect URI:', redirectUri);
+
+async function waitForSession(maxMs = 20000): Promise<Session | null> {
+  const start = Date.now();
+
+  while (Date.now() - start < maxMs) {
+    const { data } = await supabase.auth.getSession();
+    if (data.session) {
+      return data.session;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+
+  return null;
+}
 
 // ── Email Authentication ──────────────────────────────
 
@@ -76,6 +87,8 @@ export async function signInWithEmail(email: string, password: string) {
  * the result for a Supabase session.
  */
 export async function signInWithGoogle() {
+  console.log('[AUTH] redirectUri:', redirectUri);
+
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
@@ -87,38 +100,68 @@ export async function signInWithGoogle() {
   if (error) throw error;
   if (!data.url) throw new Error('No OAuth URL returned');
 
-  // Open the OAuth URL in the system browser
-  const result = await WebBrowser.openAuthSessionAsync(
-    data.url,
-    redirectUri,
-  );
+  console.log('[AUTH] OAuth URL:', data.url);
+  const result = await Promise.race([
+    WebBrowser.openAuthSessionAsync(data.url, redirectUri),
+    new Promise<{ type: 'timeout'; url?: string }>((resolve) =>
+      setTimeout(() => resolve({ type: 'timeout' }), 25000)
+    ),
+  ]);
+  console.log('[AUTH] Browser result type:', result.type);
 
-  if (result.type !== 'success') {
-    throw new Error('OAuth flow was cancelled or failed');
+  if (result.type === 'success') {
+    // Extract the tokens from the redirect URL
+    const params = extractParamsFromUrl(result.url);
+    if (params.access_token && params.refresh_token) {
+      const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+        access_token: params.access_token,
+        refresh_token: params.refresh_token,
+      });
+
+      if (sessionError) throw sessionError;
+
+      if (sessionData.session) {
+        const store = useAuthStore.getState();
+        store.setSession(sessionData.session);
+        store.setEmailVerified(true);
+      }
+
+      return sessionData;
+    }
   }
 
-  // Extract the tokens from the redirect URL
-  const params = extractParamsFromUrl(result.url);
-  if (!params.access_token || !params.refresh_token) {
-    throw new Error('Missing tokens in OAuth callback');
-  }
-
-  // Set the session in Supabase client using the tokens from the redirect
-  const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-    access_token: params.access_token,
-    refresh_token: params.refresh_token,
-  });
-
-  if (sessionError) throw sessionError;
-
-  // Update the auth store
-  if (sessionData.session) {
+  // Browser was dismissed, timed out, or redirect wasn't captured cleanly.
+  // OAuth may still have completed; poll for the session briefly.
+  const waitedSession = await waitForSession();
+  if (waitedSession) {
+    console.log('[AUTH] Recovered session by polling after auth session');
     const store = useAuthStore.getState();
-    store.setSession(sessionData.session);
-    store.setEmailVerified(true); // OAuth users are always verified
+    store.setSession(waitedSession);
+    store.setEmailVerified(true);
+    return { session: waitedSession, user: waitedSession.user };
   }
 
-  return sessionData;
+  // Final fallback: check immediately for current session.
+  const { data: existingSession } = await supabase.auth.getSession();
+  if (existingSession.session) {
+    console.log('[AUTH] Found existing session after browser dismiss');
+    const store = useAuthStore.getState();
+    store.setSession(existingSession.session);
+    store.setEmailVerified(true);
+    return { session: existingSession.session, user: existingSession.session.user };
+  }
+
+  // Try refreshing in case tokens landed in storage via the auth listener
+  const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+  if (!refreshError && refreshed.session) {
+    console.log('[AUTH] Recovered session via refresh after dismiss');
+    const store = useAuthStore.getState();
+    store.setSession(refreshed.session);
+    store.setEmailVerified(true);
+    return { session: refreshed.session, user: refreshed.session.user };
+  }
+
+  throw new Error('OAuth flow was cancelled or failed');
 }
 
 /**
@@ -139,13 +182,22 @@ export async function signInWithFacebook() {
   if (!data.url) throw new Error('No OAuth URL returned');
 
   // Open the OAuth URL in the system browser
-  const result = await WebBrowser.openAuthSessionAsync(
-    data.url,
-    redirectUri,
-  );
+  const result = await Promise.race([
+    WebBrowser.openAuthSessionAsync(data.url, redirectUri),
+    new Promise<{ type: 'timeout'; url?: string }>((resolve) =>
+      setTimeout(() => resolve({ type: 'timeout' }), 25000)
+    ),
+  ]);
 
   if (result.type !== 'success') {
-    throw new Error('OAuth flow was cancelled or failed');
+    const waitedSession = await waitForSession();
+    if (waitedSession) {
+      const store = useAuthStore.getState();
+      store.setSession(waitedSession);
+      store.setEmailVerified(true);
+      return { session: waitedSession, user: waitedSession.user };
+    }
+    throw new Error('OAuth flow was cancelled, timed out, or failed');
   }
 
   // Extract the tokens from the redirect URL
