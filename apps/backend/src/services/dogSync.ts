@@ -1,33 +1,29 @@
 // Dog sync orchestrator — owned by Data Agent
-// Fetches from DataSource, normalizes tags, upserts to PostgreSQL,
+// Fetches from Austin Paws Portal API, normalizes tags, upserts to PostgreSQL,
 // marks missing dogs as unavailable, and returns new dog IDs for notifications
 
-import { PetfinderDataSource } from './petfinderDataSource.js';
-import { normalizeRawTags } from './tagNormalization.js';
+import { AustinPawsDataSource } from './austinPawsDataSource.js';
 import { supabase } from '../db/client.js';
 import type { RawDog } from './datasource.js';
 
-const dataSource = new PetfinderDataSource();
+const dataSource = new AustinPawsDataSource();
 
 /**
  * Main sync function called by the cron job.
  *
  * Flow:
- * 1. Fetch all adoptable dogs from the DataSource
- * 2. Normalize tags using the SCRAPED_TAG_MAP
- * 3. Convert raw photo URLs to DogPhoto objects for DB storage
- * 4. Upsert each dog into the dogs table
- * 5. Mark dogs NOT in the current fetch as 'unavailable'
- * 6. Return IDs of newly inserted dogs (for push notifications)
+ * 1. Fetch all adoptable dogs from the Austin Paws Portal API
+ * 2. Upsert each dog into the dogs table (new dogs inserted, existing dogs updated)
+ * 3. Return IDs of newly inserted dogs (for push notifications)
  */
-export async function syncDogs(limit?: number, startPage = 1): Promise<string[]> {
-  console.log(`[SYNC] Starting dog sync...${limit ? ` (limit: ${limit})` : ''} (startPage: ${startPage})`);
+export async function syncDogs(limit?: number): Promise<string[]> {
+  console.log(`[SYNC] Starting dog sync...${limit ? ` (limit: ${limit})` : ''}`);
   const startTime = Date.now();
 
   // Step 1: Fetch from DataSource
   let rawDogs: RawDog[];
   try {
-    rawDogs = await dataSource.fetchAdoptableDogs(limit, startPage);
+    rawDogs = await dataSource.fetchAdoptableDogs(limit);
   } catch (err) {
     console.error('[SYNC] DataSource fetch failed:', err);
     throw err;
@@ -40,53 +36,25 @@ export async function syncDogs(limit?: number, startPage = 1): Promise<string[]>
 
   console.log(`[SYNC] Processing ${rawDogs.length} dogs for upsert...`);
 
-  // Step 2-4: Normalize and upsert each dog
-  const currentExternalIds: string[] = [];
+  // Step 2: Upsert each dog
   const newDogIds: string[] = [];
 
   for (const raw of rawDogs) {
     try {
-      // Permanent rule: if dog is already in app, skip processing it
+      // Check if dog already exists
       const { data: existing } = await supabase
         .from('dogs')
         .select('id')
-        .eq('petfinder_id', raw.external_id)
+        .eq('external_id', raw.external_id)
         .single();
 
       if (existing) {
-        currentExternalIds.push(raw.external_id);
-        continue;
-      }
+        // Dog already exists — update with latest data
+        const austinPaws = (raw as any)._austin_paws || {};
 
-      // Normalize tags from raw scraped strings to canonical keys
-      const normalizedTags = normalizeRawTags(raw.tags);
-
-      // Photos already come as proper objects with size variants from the data source
-      const photos = raw.photos;
-
-      // Build attributes from available data
-      const attributes = {
-        spayed_neutered: false,  // SODA provides this but it's on ShelterDog, not RawDog
-        house_trained: normalizedTags.includes('housetrained'),
-        special_needs: false,
-        shots_current: false,
-      };
-
-      // Build environment from normalized tags
-      const environment = {
-        children: normalizedTags.includes('experienced_with_older_kids') || normalizedTags.includes('experienced_with_young_kids') ? true : null,
-        dogs: normalizedTags.includes('experienced_with_dogs') ? true : normalizedTags.includes('dog_selective') ? false : null,
-        cats: normalizedTags.includes('experienced_with_cats') ? true : normalizedTags.includes('cat_selective') ? false : null,
-      };
-
-      const isNew = true;
-
-      // Upsert into dogs table
-      const { data: upserted, error: upsertError } = await supabase
-        .from('dogs')
-        .upsert(
-          {
-            petfinder_id: raw.external_id,
+        const { error: updateError } = await supabase
+          .from('dogs')
+          .update({
             name: raw.name,
             breed_primary: raw.breed_primary,
             breed_secondary: raw.breed_secondary,
@@ -95,61 +63,173 @@ export async function syncDogs(limit?: number, startPage = 1): Promise<string[]>
             size: raw.size || 'Medium',
             gender: raw.gender,
             description: raw.description,
-            photos: photos,
-            tags: normalizedTags,
-            attributes,
-            environment,
-            petfinder_url: raw.adoption_url,
+            photos: raw.photos,
+            tags: raw.tags,
+            attributes: buildAttributes(raw),
+            environment: buildEnvironment(raw),
+            adoption_url: raw.adoption_url,
             status: 'adoptable',
             intake_date: raw.intake_date?.toISOString() || null,
             published_at: raw.intake_date?.toISOString() || null,
             last_synced_at: new Date().toISOString(),
-          },
-          { onConflict: 'petfinder_id' }
-        )
-        .select('id')
-        .single();
+            // Austin Paws-specific fields
+            dot_color: austinPaws.dot_color || null,
+            kennel_number: austinPaws.kennel_number || null,
+            location: austinPaws.location || null,
+            is_urgent: austinPaws.is_urgent || false,
+            eligible_for_foster: austinPaws.eligible_for_foster || null,
+            adopter_notes: austinPaws.adopter_notes || null,
+            description_html: austinPaws.description_html || null,
+            foster: austinPaws.foster || false,
+          })
+          .eq('id', existing.id);
 
-      if (upsertError) {
-        console.error(`[SYNC] Upsert failed for ${raw.external_id}:`, upsertError.message);
+        if (updateError) {
+          console.error(`[SYNC] Update failed for ${raw.external_id}:`, updateError.message);
+        }
         continue;
       }
 
-      currentExternalIds.push(raw.external_id);
+      // New dog — insert
+      const austinPaws = (raw as any)._austin_paws || {};
 
-      if (isNew && upserted) {
-        newDogIds.push(upserted.id);
+      const { data: inserted, error: insertError } = await supabase
+        .from('dogs')
+        .insert({
+          external_id: raw.external_id,
+          name: raw.name,
+          breed_primary: raw.breed_primary,
+          breed_secondary: raw.breed_secondary,
+          color: raw.color,
+          age: raw.age_group,
+          size: raw.size || 'Medium',
+          gender: raw.gender,
+          description: raw.description,
+          photos: raw.photos,
+          tags: raw.tags,
+          attributes: buildAttributes(raw),
+          environment: buildEnvironment(raw),
+          adoption_url: raw.adoption_url,
+          organization_id: raw.org_id || 'TX514',
+          status: 'adoptable',
+          intake_date: raw.intake_date?.toISOString() || null,
+          published_at: raw.intake_date?.toISOString() || null,
+          last_synced_at: new Date().toISOString(),
+          // Austin Paws-specific fields
+          dot_color: austinPaws.dot_color || null,
+          kennel_number: austinPaws.kennel_number || null,
+          location: austinPaws.location || null,
+          is_urgent: austinPaws.is_urgent || false,
+          eligible_for_foster: austinPaws.eligible_for_foster || null,
+          adopter_notes: austinPaws.adopter_notes || null,
+          description_html: austinPaws.description_html || null,
+          foster: austinPaws.foster || false,
+        })
+        .select('id')
+        .single();
+
+      if (insertError) {
+        console.error(`[SYNC] Insert failed for ${raw.external_id}:`, insertError.message);
+        continue;
+      }
+
+      if (inserted) {
+        newDogIds.push(inserted.id);
       }
     } catch (err) {
-      // Individual dog upsert failure must NOT crash the entire sync
+      // Individual dog failure must NOT crash the entire sync
       console.error(`[SYNC] Error processing dog ${raw.external_id}:`, err);
       continue;
     }
   }
 
-  console.log(`[SYNC] Added ${newDogIds.length} new dogs (${currentExternalIds.length}/${rawDogs.length} active profiles retained)`);
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+  console.log(`[SYNC] Sync complete in ${elapsed}s. ${newDogIds.length} new dogs added.`);
 
-  // Step 5: DELETE dogs NOT in current fetch (no longer on Petfinder)
-  // Only do this on full syncs. Limited sync runs are incremental and should not prune.
-  // Cascade deletes will remove associated swipes and matches automatically.
-  if (!limit && currentExternalIds.length > 0) {
-    const { data: deletedDogs, error: deleteError } = await supabase
-      .from('dogs')
-      .delete()
-      .not('petfinder_id', 'in', `(${currentExternalIds.map((id) => `"${id}"`).join(',')})`)
-      .select('id');
+  return newDogIds;
+}
 
-    if (deleteError) {
-      console.error('[SYNC] Error deleting old dogs:', deleteError.message);
-    } else {
-      console.log(`[SYNC] Deleted ${deletedDogs?.length || 0} dogs no longer on Petfinder`);
+/**
+ * Verify existing dogs in our database are still active/available.
+ * Instead of fetching full dog data for each one, we fetch the full list from
+ * the Austin Paws API once and compare external_ids.
+ *
+ * Dogs that are no longer active or available are marked as 'unavailable'.
+ * Returns the count of dogs marked unavailable.
+ */
+export async function verifyExistingDogs(): Promise<number> {
+  console.log('[VERIFY] Starting verification of existing dogs...');
+  const startTime = Date.now();
+
+  // Fetch all dogs from Austin Paws (we already have this data from the sync call;
+  // the cron job should pass it in, but this is a fallback)
+  const allApiDogs = await dataSource.fetchAllDogsRaw();
+
+  // Build a set of animal_ids that are currently active + available
+  const activeAnimalIds = new Set<string>();
+  for (const dog of allApiDogs) {
+    if (dog.is_active && dog.status === 'AVAILABLE') {
+      activeAnimalIds.add(dog.animal_id);
     }
-  } else if (limit) {
-    console.log('[SYNC] Limited sync: skipping deletion pass');
+  }
+
+  console.log(`[VERIFY] ${activeAnimalIds.size} active/available dogs in Austin Paws API`);
+
+  // Fetch all our currently adoptable dogs' external_ids
+  const { data: ourDogs, error } = await supabase
+    .from('dogs')
+    .select('id, external_id')
+    .eq('status', 'adoptable');
+
+  if (error || !ourDogs) {
+    console.error('[VERIFY] Failed to fetch our dogs:', error?.message);
+    return 0;
+  }
+
+  // Find dogs in our DB that are no longer active in the API
+  const toMarkUnavailable: string[] = [];
+  for (const dog of ourDogs) {
+    if (!activeAnimalIds.has(dog.external_id)) {
+      toMarkUnavailable.push(dog.id);
+    }
+  }
+
+  if (toMarkUnavailable.length > 0) {
+    const { error: updateError } = await supabase
+      .from('dogs')
+      .update({ status: 'unavailable', last_synced_at: new Date().toISOString() })
+      .in('id', toMarkUnavailable);
+
+    if (updateError) {
+      console.error('[VERIFY] Failed to mark dogs unavailable:', updateError.message);
+    } else {
+      console.log(`[VERIFY] Marked ${toMarkUnavailable.length} dogs as unavailable`);
+    }
+  } else {
+    console.log('[VERIFY] All existing dogs are still active');
   }
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-  console.log(`[SYNC] Sync complete in ${elapsed}s. ${newDogIds.length} new dogs.`);
+  console.log(`[VERIFY] Verification complete in ${elapsed}s`);
 
-  return newDogIds;
+  return toMarkUnavailable.length;
+}
+
+// ── Helpers ──────────────────────────
+
+function buildAttributes(raw: RawDog) {
+  return {
+    spayed_neutered: false,
+    house_trained: raw.tags.includes('housetrained'),
+    special_needs: false,
+    shots_current: false,
+  };
+}
+
+function buildEnvironment(raw: RawDog) {
+  return {
+    children: raw.tags.includes('experienced_with_older_kids') || raw.tags.includes('experienced_with_young_kids') ? true : null,
+    dogs: raw.tags.includes('experienced_with_dogs') ? true : raw.tags.includes('dog_selective') ? false : null,
+    cats: raw.tags.includes('experienced_with_cats') ? true : raw.tags.includes('cat_selective') ? false : null,
+  };
 }

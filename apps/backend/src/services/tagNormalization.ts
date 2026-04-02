@@ -1,75 +1,56 @@
 // Tag normalization — owned by Data Agent
 // Two maps:
-// 1. SCRAPED_TAG_MAP: converts raw scraped tag strings → canonical PreferenceKey (used during sync)
+// 1. AUSTIN_PAWS_KEY_MAP: converts Austin Paws characteristic_keys → canonical PreferenceKey (used during sync)
 // 2. TAG_MAP: maps PreferenceKey → checker function on Dog objects (used by matching.ts)
 
 import type { PreferenceKey, Dog } from '@fetch/shared';
 
-// ── SCRAPED_TAG_MAP ──────────────────────────
-// Used by dogSync to normalize raw tag strings from adopets.com into canonical tags.
-// Case-insensitive matching; keys are lowercase.
+// ── AUSTIN_PAWS_KEY_MAP ──────────────────────────
+// Maps Austin Paws Portal characteristic_keys (uppercase) to canonical PreferenceKey values.
+// Keys not in this map are kept as lowercase display tags (e.g., 'bonded_pair', 'heartworm_positive').
 
-export const SCRAPED_TAG_MAP: Record<string, PreferenceKey> = {
-  'active': 'active_lifestyle',
-  'high energy': 'active_lifestyle',
-  'energetic': 'active_lifestyle',
-  'good with cats': 'experienced_with_cats',
-  'cat friendly': 'experienced_with_cats',
-  'cat selective': 'cat_selective',
-  'affectionate': 'cuddler',
-  'cuddly': 'cuddler',
-  'loves cuddles': 'cuddler',
-  'good with dogs': 'experienced_with_dogs',
-  'dog friendly': 'experienced_with_dogs',
-  'dog selective': 'dog_selective',
-  'housetrained': 'housetrained',
-  'house trained': 'housetrained',
-  'potty trained': 'housetrained',
-  'independent': 'independent',
-  'knows tricks': 'knows_tricks',
-  'trained': 'knows_tricks',
-  'calm': 'laid_back',
-  'mellow': 'laid_back',
-  'laid back': 'laid_back',
-  'leash trained': 'leash_trained',
-  'good on leash': 'leash_trained',
-  'loves car rides': 'loves_car_rides',
-  'good in car': 'loves_car_rides',
-  'food motivated': 'loves_food_and_treats',
-  'treat motivated': 'loves_food_and_treats',
-  'loves water': 'loves_the_water',
-  'swimmer': 'loves_the_water',
-  'medium energy': 'medium_energy',
-  'good with older kids': 'experienced_with_older_kids',
-  'good with kids': 'experienced_with_older_kids',
-  'playful': 'playful',
-  'good with young kids': 'experienced_with_young_kids',
-  'good with children': 'experienced_with_young_kids',
-  'foster eligible': 'foster_eligible',
-  'indoor only': 'indoor_only',
-  'indoor/outdoor': 'indoor_outdoor',
-  'quiet home': 'quiet_home',
-  'needs quiet home': 'quiet_home',
+export const AUSTIN_PAWS_KEY_MAP: Record<string, PreferenceKey> = {
+  'HIGH_ENERGY': 'active_lifestyle',
+  'CAT_COMPATIBLE': 'experienced_with_cats',
+  'CAT_SELECTIVE': 'cat_selective',
+  'CUDDLER': 'cuddler',
+  'DOG_COMPATIBLE': 'experienced_with_dogs',
+  'DOG_SELECTIVE': 'dog_selective',
+  'HOUSETRAINED': 'housetrained',
+  'INDEPENDENT': 'independent',
+  'KNOW_TRICKS': 'knows_tricks',
+  'LOW_ENERGY': 'laid_back',
+  'LEASH_TRAINED': 'leash_trained',
+  'LOVES_CAR_RIDES': 'loves_car_rides',
+  'LOVES_FOOD_TREATS': 'loves_food_and_treats',
+  'LOVES_THE_WATRER': 'loves_the_water',        // typo in source data, intentional match
+  'LOVES_THE_WATER': 'loves_the_water',          // in case they fix the typo
+  'MEDIUM_ENERGY': 'medium_energy',
+  'OLDER_KID_COMPATIBLE': 'experienced_with_older_kids',
+  'PLAYFUL': 'playful',
+  'YOUNG_KID_COMPATIBLE': 'experienced_with_young_kids',
+  'FOSTER_ELIGIBLE': 'foster_eligible',
+  'INDOOR_ONLY': 'indoor_only',
+  'INDOOR_OUTDOOR': 'indoor_outdoor',
+  'LONG_TERM_RESIDENT': 'long_term_resident',
+  'QUIET_HOME': 'quiet_home',
 };
 
 /**
- * Normalize raw scraped tags into canonical PreferenceKey strings.
- * Unrecognized tags are kept as-is (they'll still appear in the dog's tag list
- * but won't match any preference key during scoring).
- *
- * Note: long_term_resident is computed from intake_date (> 21 days), not from tags.
+ * Normalize Austin Paws characteristic_keys into canonical PreferenceKey strings.
+ * Keys that match AUSTIN_PAWS_KEY_MAP are converted to canonical form.
+ * Unrecognized keys are kept as lowercase for display (e.g., 'bonded_pair').
  */
-export function normalizeRawTags(rawTags: string[]): string[] {
+export function normalizeAustinPawsKeys(keys: string[]): string[] {
   const normalized = new Set<string>();
 
-  for (const tag of rawTags) {
-    const lower = tag.toLowerCase().trim();
-    const canonical = SCRAPED_TAG_MAP[lower];
+  for (const key of keys) {
+    const canonical = AUSTIN_PAWS_KEY_MAP[key];
     if (canonical) {
       normalized.add(canonical);
     } else {
-      // Keep unrecognized tags as lowercase for display
-      normalized.add(lower);
+      // Keep unrecognized keys as lowercase for display
+      normalized.add(key.toLowerCase());
     }
   }
 
@@ -93,7 +74,7 @@ export const TAG_MAP: Record<PreferenceKey, PreferenceChecker> = {
     dog.environment.cats === false ||
     dog.tags.some((t) => ['cat_selective'].includes(t.toLowerCase())),
   cuddler: (dog) =>
-    dog.tags.some((t) => ['cuddly', 'cuddler', 'affectionate', 'snuggler', 'cuddler'].includes(t.toLowerCase())),
+    dog.tags.some((t) => ['cuddly', 'cuddler', 'affectionate', 'snuggler'].includes(t.toLowerCase())),
   experienced_with_dogs: (dog) =>
     dog.environment.dogs === true ||
     dog.tags.some((t) => ['experienced_with_dogs'].includes(t.toLowerCase())),
@@ -133,9 +114,10 @@ export const TAG_MAP: Record<PreferenceKey, PreferenceChecker> = {
   indoor_outdoor: (dog) =>
     dog.tags.some((t) => ['indoor outdoor', 'indoor/outdoor', 'indoor_outdoor'].includes(t.toLowerCase())),
   long_term_resident: (dog) =>
-    dog.published_at
+    dog.tags.some((t) => ['long_term_resident'].includes(t.toLowerCase())) ||
+    (dog.published_at
       ? Date.now() - new Date(dog.published_at).getTime() > 21 * 24 * 60 * 60 * 1000
-      : false,
+      : false),
   quiet_home: (dog) =>
     dog.tags.some((t) => ['quiet home', 'shy', 'timid', 'quiet_home'].includes(t.toLowerCase())),
 };

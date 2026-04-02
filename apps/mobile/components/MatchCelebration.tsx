@@ -36,8 +36,6 @@ export default function MatchCelebration() {
     const url = action === 'adopt' ? matchedDog!.adoption_url : matchedDog!.foster_url;
     if (url) {
       await WebBrowser.openBrowserAsync(url);
-    } else if (matchedDog!.petfinder_url) {
-      await WebBrowser.openBrowserAsync(matchedDog!.petfinder_url);
     }
 
     dismissMatch();

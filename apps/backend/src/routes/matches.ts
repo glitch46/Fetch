@@ -12,7 +12,7 @@ export async function matchesRoutes(fastify: FastifyInstance) {
    * POST /matches — record match action after user selects Adopt or Foster
    * Body: { dog_id: string, action: 'adopt' | 'foster' }
    * Returns: { redirect_url: string }
-   *   - For 'adopt': the dog's petfinder_url (adoption deep-link)
+   *   - For 'adopt': the dog's adoption_url (adopets.com deep-link)
    *   - For 'foster': Austin foster care application URL
    */
   fastify.post<{
@@ -37,10 +37,10 @@ export async function matchesRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Fetch the dog to get petfinder_url for adopt redirect
+      // Fetch the dog to get adoption_url for adopt redirect
       const { data: dog, error: dogError } = await supabase
         .from('dogs')
-        .select('id, petfinder_url')
+        .select('id, adoption_url')
         .eq('id', dog_id)
         .single();
 
@@ -68,7 +68,7 @@ export async function matchesRoutes(fastify: FastifyInstance) {
       }
 
       const redirect_url = action === 'adopt'
-        ? (dog.petfinder_url || '')
+        ? (dog.adoption_url || '')
         : FOSTER_URL;
 
       return reply.status(200).send({

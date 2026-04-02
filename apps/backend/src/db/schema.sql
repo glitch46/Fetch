@@ -31,35 +31,43 @@ CREATE TABLE user_preferences (
 );
 
 -- DOGS
--- petfinder_id stores the external animal ID (e.g., SODA animal_id "A929698")
--- petfinder_url stores the adoption deep-link URL (e.g., adopets.com URL)
--- published_at stores the intake date (source_date from SODA) — used for long_term_resident check
+-- external_id stores the shelter animal ID (e.g., Austin Paws animal_id "19138")
+-- adoption_url stores the adoption deep-link URL (e.g., adopets.com pet page)
+-- published_at stores the intake date — used for long_term_resident check and days_in_shelter
 CREATE TABLE dogs (
-  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  petfinder_id    VARCHAR(50) UNIQUE NOT NULL,
-  name            VARCHAR(100) NOT NULL,
-  breed_primary   VARCHAR(100),
-  breed_secondary VARCHAR(100),
-  color           VARCHAR(100),
-  age             VARCHAR(20) CHECK (age IN ('Baby', 'Young', 'Adult', 'Senior')),
-  size            VARCHAR(20) CHECK (size IN ('Small', 'Medium', 'Large', 'Extra Large')),
-  gender          VARCHAR(10) CHECK (gender IN ('Male', 'Female', 'Unknown')),
-  description     TEXT,
-  photos          JSONB DEFAULT '[]',
-  tags            TEXT[] DEFAULT '{}',
-  attributes      JSONB DEFAULT '{}',
-  environment     JSONB DEFAULT '{}',
-  petfinder_url   VARCHAR(500),                      -- adoption URL (RescueGroups listing or direct link)
-  -- adoption_url and foster_url are computed at serve-time from petfinder_url
-  organization_id VARCHAR(20) NOT NULL DEFAULT 'TX514',
-  status          VARCHAR(20) NOT NULL DEFAULT 'adoptable' CHECK (status IN ('adoptable', 'unavailable')),
-  intake_date     TIMESTAMP WITH TIME ZONE,
-  published_at    TIMESTAMP WITH TIME ZONE,
-  last_synced_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  external_id       VARCHAR(50) UNIQUE NOT NULL,
+  name              VARCHAR(100) NOT NULL,
+  breed_primary     VARCHAR(100),
+  breed_secondary   VARCHAR(100),
+  color             VARCHAR(100),
+  age               VARCHAR(20) CHECK (age IN ('Baby', 'Young', 'Adult', 'Senior')),
+  size              VARCHAR(20) CHECK (size IN ('Small', 'Medium', 'Large', 'Extra Large')),
+  gender            VARCHAR(10) CHECK (gender IN ('Male', 'Female', 'Unknown')),
+  description       TEXT,
+  description_html  TEXT,                                   -- raw HTML description from Austin Paws
+  photos            JSONB DEFAULT '[]',
+  tags              TEXT[] DEFAULT '{}',
+  attributes        JSONB DEFAULT '{}',
+  environment       JSONB DEFAULT '{}',
+  adoption_url      VARCHAR(500),                           -- adopets.com pet page URL
+  organization_id   VARCHAR(20) NOT NULL DEFAULT 'TX514',
+  status            VARCHAR(20) NOT NULL DEFAULT 'adoptable' CHECK (status IN ('adoptable', 'unavailable')),
+  intake_date       TIMESTAMP WITH TIME ZONE,
+  published_at      TIMESTAMP WITH TIME ZONE,
+  last_synced_at    TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  -- Austin Paws Portal-specific fields
+  dot_color         VARCHAR(20),                            -- color-coded handling indicator (blue/purple/orange/yellow/red/green)
+  kennel_number     VARCHAR(20),                            -- kennel assignment
+  location          VARCHAR(100),                           -- physical location string
+  is_urgent         BOOLEAN DEFAULT false,                  -- flagged as urgent
+  eligible_for_foster BOOLEAN,                              -- eligible for foster placement
+  adopter_notes     TEXT,                                   -- notes visible to adopters
+  foster            BOOLEAN DEFAULT false,                  -- currently in foster care
+  created_at        TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE UNIQUE INDEX idx_dogs_petfinder_id ON dogs(petfinder_id);
+CREATE UNIQUE INDEX idx_dogs_external_id ON dogs(external_id);
 CREATE INDEX idx_dogs_status ON dogs(status);
 CREATE INDEX idx_dogs_organization ON dogs(organization_id);
 CREATE INDEX idx_dogs_synced ON dogs(last_synced_at);

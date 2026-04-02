@@ -54,7 +54,7 @@ function dbRowToDog(
 
   return {
     id: row.id as string,
-    petfinder_id: row.petfinder_id as string,
+    external_id: row.external_id as string,
     name: row.name as string,
     breed_primary: (row.breed_primary as string) || null,
     breed_secondary: (row.breed_secondary as string) || null,
@@ -62,11 +62,13 @@ function dbRowToDog(
     size: row.size as Dog['size'],
     gender: row.gender as Dog['gender'],
     description: (row.description as string) || null,
+    description_html: (row.description_html as string) || null,
     photos,
     tags: (row.tags as string[]) || [],
     attributes,
     environment,
-    petfinder_url: (row.petfinder_url as string) || '',
+    adoption_url: (row.adoption_url as string) || null,
+    foster_url: 'https://www.austintexas.gov/page/foster-care-application',
     organization_id: (row.organization_id as string) || 'TX514',
     status: row.status as Dog['status'],
     published_at: (row.published_at as string) || null,
@@ -74,9 +76,15 @@ function dbRowToDog(
     matched_preferences: matchedPreferences,
     prompts: (row.prompts as Dog['prompts']) || null,
     days_in_shelter: (row.days_in_shelter as number) ?? null,
-    adoption_url: (row.petfinder_url as string) || null,
-    foster_url: 'https://www.austintexas.gov/page/foster-care-application',
     last_synced_at: (row.last_synced_at as string) || null,
+    // Austin Paws-specific fields
+    dot_color: (row.dot_color as string) || null,
+    kennel_number: (row.kennel_number as string) || null,
+    location: (row.location as string) || null,
+    is_urgent: (row.is_urgent as boolean) || false,
+    eligible_for_foster: (row.eligible_for_foster as boolean | null) ?? null,
+    adopter_notes: (row.adopter_notes as string) || null,
+    foster: (row.foster as boolean) || false,
   };
 }
 

@@ -46,7 +46,3 @@ npm-debug.log*
 
 # Testing
 coverage/
-
-# Playwright
-apps/backend/playwright-report/
-apps/backend/test-results/

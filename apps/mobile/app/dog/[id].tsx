@@ -110,7 +110,7 @@ export default function DogProfileScreen() {
     let url: string | null = null;
     if (action === 'adopt') {
       // Adopt: open the dog's adoption listing
-      url = dog!.adoption_url || dog!.petfinder_url || null;
+      url = dog!.adoption_url || null;
     } else {
       // Foster: open AAC foster application
       url = dog!.foster_url || 'https://www.austintexas.gov/page/foster-care-application';
@@ -305,13 +305,13 @@ export default function DogProfileScreen() {
         })}
 
         {/* Find Me On Section */}
-        {(dog.adoption_url || dog.petfinder_url) && (
+        {dog.adoption_url && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Find Me On</Text>
             <TouchableOpacity
               style={styles.externalLink}
               onPress={() =>
-                WebBrowser.openBrowserAsync(dog.adoption_url || dog.petfinder_url)
+                WebBrowser.openBrowserAsync(dog.adoption_url!)
               }
             >
               <Ionicons name="open-outline" size={20} color={colors.secondary} />

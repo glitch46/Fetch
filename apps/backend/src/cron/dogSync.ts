@@ -1,47 +1,48 @@
 // Dog sync cron job — owned by Data Agent (implementation)
-// Schedules periodic data sync from shelter data sources to PostgreSQL
-// Triggers push notifications for new dogs after sync completes
+// Schedules periodic data sync from Austin Paws Portal API to PostgreSQL
+// Runs every 12 hours: syncs new dogs and verifies existing dogs are still active
 
 import cron from 'node-cron';
-import { syncDogs } from '../services/dogSync.js';
+import { syncDogs, verifyExistingDogs } from '../services/dogSync.js';
 import { sendNewMatchNotifications, sendUrgentDogNotifications } from '../services/notifications.js';
 
+let syncInProgress = false;
+
 export function startCronJobs() {
-  // Run dog sync every 2 hours and keep running until at least 50 new dogs are added.
-  cron.schedule('0 */2 * * *', async () => {
-    console.log('[CRON] Starting incremental dog sync (target: 50 new dogs)...');
+  // Run dog sync every 12 hours (at midnight and noon, America/Chicago)
+  cron.schedule('0 0,12 * * *', async () => {
+    if (syncInProgress) {
+      console.warn('[CRON] Previous sync is still running; skipping this trigger');
+      return;
+    }
+
+    syncInProgress = true;
+    console.log('[CRON] Starting dog sync cycle...');
+
     try {
-      const targetNewDogs = 50;
-      let totalNewDogIds: string[] = [];
-      let attempts = 0;
+      // Step 1: Sync new dogs from Austin Paws Portal
+      const newDogIds = await syncDogs();
+      console.log(`[CRON] Dog sync completed. ${newDogIds.length} new dogs added.`);
 
-      while (totalNewDogIds.length < targetNewDogs) {
-        attempts += 1;
-        const startPage = (attempts - 1) * 9 + 1;
-        const newDogIds = await syncDogs(50, startPage);
-        totalNewDogIds = [...totalNewDogIds, ...newDogIds];
-        console.log(`[CRON] Attempt ${attempts} (startPage ${startPage}): added ${newDogIds.length} dogs (${totalNewDogIds.length}/${targetNewDogs} total)`);
+      // Step 2: Verify existing dogs are still active/available
+      const markedUnavailable = await verifyExistingDogs();
+      console.log(`[CRON] Verification completed. ${markedUnavailable} dogs marked unavailable.`);
 
-        if (newDogIds.length === 0) {
-          console.log('[CRON] No new dogs on this page window; continuing to next window');
-        }
+      // Step 3: Send push notifications for newly matched dogs
+      if (newDogIds.length > 0) {
+        console.log(`[CRON] Sending new match notifications for ${newDogIds.length} dogs...`);
+        await sendNewMatchNotifications(newDogIds);
       }
 
-      console.log(`[CRON] Dog sync completed. ${totalNewDogIds.length} new dogs added.`);
-
-      // Send push notifications for newly matched dogs
-      if (totalNewDogIds.length > 0) {
-        console.log(`[CRON] Sending new match notifications for ${totalNewDogIds.length} dogs...`);
-        await sendNewMatchNotifications(totalNewDogIds);
-      }
-
-      // Check for urgent/long-stay dogs and notify
+      // Step 4: Check for urgent/long-stay dogs and notify
       console.log('[CRON] Checking for urgent dog notifications...');
       await sendUrgentDogNotifications();
     } catch (err) {
-      console.error('[CRON] Dog sync failed:', err);
+      console.error('[CRON] Dog sync cycle failed:', err);
+    } finally {
+      syncInProgress = false;
     }
   }, { timezone: 'America/Chicago' });
 
-  console.log('[CRON] Dog sync job scheduled (every 2 hours, America/Chicago)');
+  console.log('[CRON] Dog sync job scheduled (every 12 hours at midnight and noon, America/Chicago)');
 }

@@ -39,7 +39,7 @@ export interface DogEnvironment {
 
 export interface Dog {
   id: string;
-  petfinder_id: string;
+  external_id: string;
   name: string;
   breed_primary: string | null;
   breed_secondary: string | null;
@@ -47,11 +47,13 @@ export interface Dog {
   size: 'Small' | 'Medium' | 'Large' | 'Extra Large';
   gender: 'Male' | 'Female' | 'Unknown';
   description: string | null;
+  description_html: string | null;
   photos: DogPhoto[];
   tags: string[];
   attributes: DogAttributes;
   environment: DogEnvironment;
-  petfinder_url: string;
+  adoption_url: string | null;
+  foster_url: string | null;
   organization_id: string;
   status: 'adoptable' | 'unavailable';
   published_at: string | null;
@@ -59,9 +61,15 @@ export interface Dog {
   matched_preferences: string[];
   prompts: Array<{ prompt: string; response: string }> | null;
   days_in_shelter: number | null;
-  adoption_url: string | null;
-  foster_url: string | null;
   last_synced_at: string | null;
+  // Austin Paws Portal-specific fields
+  dot_color: string | null;
+  kennel_number: string | null;
+  location: string | null;
+  is_urgent: boolean;
+  eligible_for_foster: boolean | null;
+  adopter_notes: string | null;
+  foster: boolean;
 }
 
 export interface Swipe {
