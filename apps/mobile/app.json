@@ -12,14 +12,18 @@
       "resizeMode": "contain",
       "backgroundColor": "#F5A623"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.fetch.app",
       "infoPlist": {
         "CFBundleURLTypes": [
           {
-            "CFBundleURLSchemes": ["fetch"]
+            "CFBundleURLSchemes": [
+              "fetch"
+            ]
           }
         ]
       }
@@ -41,13 +45,23 @@
               "pathPrefix": "/callback"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
     "plugins": [
       "expo-router",
-      "expo-secure-store"
-    ]
+      "expo-secure-store",
+      "expo-font"
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "182b9f7a-700b-4b26-bf56-dfdd1a9ab86e"
+      }
+    }
   }
 }
