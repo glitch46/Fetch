@@ -5,14 +5,11 @@
 
 import { supabase } from './supabase';
 import { useAuthStore } from '../store/useAuthStore';
-import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import type { Session, AuthChangeEvent } from '@supabase/supabase-js';
 
-// OAuth redirect URI — use no path so the router doesn't try to match it as a route.
-// Expo Go: exp://192.168.x.x:8081
-// Dev build / standalone: fetch://
-const redirectUri = AuthSession.makeRedirectUri();
+// OAuth redirect URI must stay fixed and match app.json intent filter + Supabase allowlist.
+const redirectUri = 'fetch://auth/callback';
 
 console.log('[AUTH] Redirect URI:', redirectUri);
 
