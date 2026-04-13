@@ -1,11 +1,11 @@
 // Root layout — owned by Auth Agent (auth state listener) + Mobile Agent (navigation structure)
-// Initializes auth state listener, loads fonts, and wraps navigation in AuthGuard
+// Initializes auth state listener, loads fonts, handles OAuth deep links, and wraps navigation in AuthGuard
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { Stack } from 'expo-router';
 import { useAuthStore } from '../store/useAuthStore';
-import { onAuthStateChange, getSession } from '../lib/auth';
+import { onAuthStateChange, getSession, extractParamsFromUrl } from '../lib/auth';
 import AuthGuard from '../components/AuthGuard';
 import { supabase } from '../lib/supabase';
 import type { User } from '@fetch/shared';
@@ -17,12 +17,9 @@ import {
   Nunito_800ExtraBold,
 } from '@expo-google-fonts/nunito';
 import * as SplashScreen from 'expo-splash-screen';
-import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { colors } from '../constants/colors';
-
-// Must run before router handles any URLs — intercepts OAuth callback redirects
-WebBrowser.maybeCompleteAuthSession();
 
 SplashScreen.preventAutoHideAsync();
 
@@ -73,9 +70,60 @@ async function refreshSessionWithTimeout(timeoutMs = 7000) {
   }
 }
 
+/**
+ * Process an OAuth callback URL by extracting tokens and setting the Supabase session.
+ * Called when the app receives a deep link like fetch://auth/callback#access_token=...
+ */
+async function handleOAuthCallback(url: string) {
+  console.log('[DEEPLINK] Processing callback URL:', url.substring(0, 80) + '...');
+
+  if (!url.startsWith('fetch://auth/callback')) {
+    return;
+  }
+
+  const params = extractParamsFromUrl(url);
+  const accessToken = params.access_token;
+  const refreshToken = params.refresh_token;
+
+  if (!accessToken || !refreshToken) {
+    console.warn('[DEEPLINK] No tokens found in callback URL');
+    return;
+  }
+
+  try {
+    const { data, error } = await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+
+    if (error) {
+      console.error('[DEEPLINK] setSession error:', error.message);
+      return;
+    }
+
+    if (data.session) {
+      console.log('[DEEPLINK] Session set successfully for:', data.session.user.email);
+      const store = useAuthStore.getState();
+      store.setSession(data.session);
+      store.setEmailVerified(true);
+
+      const profile = await fetchProfile(data.session.access_token);
+      if (profile) {
+        store.setUser(profile as User);
+        if ((profile as any).has_completed_onboarding) {
+          store.setHasCompletedOnboarding(true);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[DEEPLINK] Error processing callback:', err);
+  }
+}
+
 export default function RootLayout() {
   const { setSession, setUser, setLoading, setEmailVerified, setHasCompletedOnboarding, reset } = useAuthStore();
   const [error, setError] = useState<string | null>(null);
+  const processedUrlRef = useRef<string | null>(null);
 
   const [fontsLoaded, fontError] = useFonts({
     Nunito_400Regular,
@@ -90,15 +138,40 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, fontError]);
 
+  // Handle deep links for OAuth callbacks
   useEffect(() => {
-    // Initialize: check for existing session in secure store
+    // Check for URL that launched the app (cold start)
+    Linking.getInitialURL().then((url) => {
+      if (url && url.startsWith('fetch://auth/callback')) {
+        if (processedUrlRef.current !== url) {
+          processedUrlRef.current = url;
+          handleOAuthCallback(url);
+        }
+      }
+    });
+
+    // Listen for URLs while app is running (warm start)
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      if (url && url.startsWith('fetch://auth/callback')) {
+        if (processedUrlRef.current !== url) {
+          processedUrlRef.current = url;
+          handleOAuthCallback(url);
+        }
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
     async function initAuth() {
       try {
-        // Check that required env vars are set
         if (!process.env.EXPO_PUBLIC_SUPABASE_URL || !process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY) {
           throw new Error('Missing Supabase configuration. Check EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY environment variables.');
         }
-        
+
         const session = await getSession();
         if (session) {
           const refreshedSession = await refreshSessionWithTimeout();
@@ -106,7 +179,6 @@ export default function RootLayout() {
           setSession(activeSession);
           setEmailVerified(!!activeSession.user.email_confirmed_at);
 
-          // Fetch the full user profile from the backend (bypasses axios interceptor)
           const profile = await fetchProfile(activeSession.access_token);
           if (profile) {
             setUser(profile as User);
@@ -126,15 +198,10 @@ export default function RootLayout() {
 
     initAuth();
 
-    // Listen for auth state changes (sign in, sign out, token refresh)
     const subscription = onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session) {
-        // Fetch profile BEFORE setting session to avoid AuthGuard race condition.
-        // If we set session first, AuthGuard fires with hasCompletedOnboarding=false
-        // and redirects to /preferences before fetchProfile can set it to true.
         const profile = await fetchProfile(session.access_token);
 
-        // Now set all auth state at once so AuthGuard has complete info
         if (profile) {
           setUser(profile as User);
           if (profile.has_completed_onboarding) {
@@ -158,7 +225,6 @@ export default function RootLayout() {
     };
   }, []);
 
-  // Show error screen
   if (error) {
     return (
       <View style={styles.errorContainer}>
@@ -168,7 +234,6 @@ export default function RootLayout() {
     );
   }
 
-  // Show loading while fonts load
   if (!fontsLoaded && !fontError) {
     return (
       <View style={styles.loading}>
@@ -177,7 +242,7 @@ export default function RootLayout() {
     );
   }
 
-return (
+  return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthGuard>
         <Stack screenOptions={{ headerShown: false }}>
@@ -186,6 +251,7 @@ return (
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="preferences" />
           <Stack.Screen name="dog/[id]" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="auth/callback" options={{ headerShown: false, animation: 'none' }} />
         </Stack>
       </AuthGuard>
     </GestureHandlerRootView>

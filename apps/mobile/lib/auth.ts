@@ -1,12 +1,11 @@
 // Auth service — owned by Auth Agent
-// Complete authentication service for email, Google OAuth, and Facebook OAuth
-// All tokens are stored in expo-secure-store via the Supabase client adapter (see supabase.ts)
-// NEVER use AsyncStorage for auth tokens
+// OAuth uses openBrowserAsync + session polling.
+// Deep link callback (fetch://auth/callback) is handled in _layout.tsx via Linking,
+// which sets the Supabase session independently of this module.
 
 import { supabase } from './supabase';
 import { useAuthStore } from '../store/useAuthStore';
 import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
 import type { Session, AuthChangeEvent } from '@supabase/supabase-js';
 
 const redirectUri = 'fetch://auth/callback';
@@ -54,14 +53,19 @@ export async function signInWithEmail(email: string, password: string) {
   return data;
 }
 
-// ── OAuth Helper ──────────────────────────────────────
+// ── OAuth Authentication ──────────────────────────────
 
 /**
- * Opens the OAuth URL in the system browser and waits for a deep link redirect
- * back to fetch://auth/callback. On Android, openAuthSessionAsync cannot capture
- * custom scheme redirects reliably, so we use openBrowserAsync + deep link listener.
+ * Opens the OAuth provider in the system browser.
+ * After the user completes authentication, the browser redirects to
+ * fetch://auth/callback which Android opens via the app's intent filter.
+ * The deep link handler in _layout.tsx catches this URL, extracts tokens,
+ * and calls supabase.auth.setSession().
+ *
+ * This function opens the browser, waits for it to close, then polls
+ * for the session that was set by the deep link handler.
  */
-async function openOAuthFlow(provider: 'google' | 'facebook'): Promise<Session> {
+async function openOAuthAndPoll(provider: 'google' | 'facebook'): Promise<Session> {
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider,
     options: {
@@ -75,84 +79,41 @@ async function openOAuthFlow(provider: 'google' | 'facebook'): Promise<Session> 
 
   console.log(`[AUTH] ${provider} OAuth URL:`, data.url);
 
-  const deepLinkUrl = await Promise.race([
-    new Promise<string | null>((resolve) => {
-      let resolved = false;
-      const sub = Linking.addEventListener('url', ({ url }) => {
-        if (url && url.startsWith('fetch://auth/callback')) {
-          if (!resolved) {
-            resolved = true;
-            sub.remove();
-            resolve(url);
-          }
-        }
-      });
-      setTimeout(() => {
-        if (!resolved) {
-          resolved = true;
-          sub.remove();
-          resolve(null);
-        }
-      }, 120000);
-    }),
-    WebBrowser.openBrowserAsync(data.url).then(() => null as string | null),
-  ]);
-
+  await WebBrowser.openBrowserAsync(data.url);
   WebBrowser.dismissBrowser();
 
-  console.log('[AUTH] Deep link result:', deepLinkUrl ? 'received' : 'none');
+  // The deep link handler in _layout.tsx should have already set the session.
+  // Poll as a fallback in case of timing issues.
+  console.log('[AUTH] Browser closed, polling for session...');
+  const session = await waitForSession(15000);
 
-  if (deepLinkUrl) {
-    const params = extractParamsFromUrl(deepLinkUrl);
-    if (params.access_token && params.refresh_token) {
-      const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-        access_token: params.access_token,
-        refresh_token: params.refresh_token,
-      });
-      if (sessionError) throw sessionError;
-      if (sessionData.session) {
-        const store = useAuthStore.getState();
-        store.setSession(sessionData.session);
-        store.setEmailVerified(true);
-        return sessionData.session;
-      }
-    }
-  }
-
-  const session = await waitForSession();
   if (session) {
-    console.log('[AUTH] Recovered session after OAuth');
+    console.log('[AUTH] Session found after OAuth');
     const store = useAuthStore.getState();
     store.setSession(session);
     store.setEmailVerified(true);
     return session;
   }
 
+  // Try one more immediate check
   const { data: existing } = await supabase.auth.getSession();
   if (existing.session) {
+    console.log('[AUTH] Found existing session');
     const store = useAuthStore.getState();
     store.setSession(existing.session);
     store.setEmailVerified(true);
     return existing.session;
   }
 
-  const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
-  if (!refreshError && refreshed.session) {
-    const store = useAuthStore.getState();
-    store.setSession(refreshed.session);
-    store.setEmailVerified(true);
-    return refreshed.session;
-  }
-
-  throw new Error(`${provider} login was cancelled or failed`);
+  throw new Error(`${provider} login was cancelled or failed. Please try again.`);
 }
 
 export async function signInWithGoogle() {
-  return openOAuthFlow('google');
+  return openOAuthAndPoll('google');
 }
 
 export async function signInWithFacebook() {
-  return openOAuthFlow('facebook');
+  return openOAuthAndPoll('facebook');
 }
 
 // ── Session Management ──────────────────────────────
@@ -192,7 +153,7 @@ export async function resendVerificationEmail(email: string) {
 
 // ── Helpers ──────────────────────────────
 
-function extractParamsFromUrl(url: string): Record<string, string> {
+export function extractParamsFromUrl(url: string): Record<string, string> {
   const params: Record<string, string> = {};
 
   const hashIndex = url.indexOf('#');
