@@ -9,53 +9,22 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import type { Session, AuthChangeEvent } from '@supabase/supabase-js';
 
-// OAuth redirect URI must stay fixed and match app.json intent filter + Supabase allowlist.
 const redirectUri = 'fetch://auth/callback';
 
 console.log('[AUTH] Redirect URI:', redirectUri);
 
-async function waitForRedirectUrl(expectedPrefix: string, timeoutMs = 25000): Promise<string | null> {
-  return new Promise((resolve) => {
-    let finished = false;
-
-    const cleanup = (value: string | null) => {
-      if (finished) return;
-      finished = true;
-      clearTimeout(timer);
-      subscription.remove();
-      resolve(value);
-    };
-
-    const subscription = Linking.addEventListener('url', ({ url }) => {
-      if (url && url.startsWith(expectedPrefix)) {
-        cleanup(url);
-      }
-    });
-
-    const timer = setTimeout(() => cleanup(null), timeoutMs);
-  });
-}
-
-async function waitForSession(maxMs = 20000): Promise<Session | null> {
+async function waitForSession(maxMs = 15000): Promise<Session | null> {
   const start = Date.now();
-
   while (Date.now() - start < maxMs) {
     const { data } = await supabase.auth.getSession();
-    if (data.session) {
-      return data.session;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    if (data.session) return data.session;
+    await new Promise((r) => setTimeout(r, 500));
   }
-
   return null;
 }
 
 // ── Email Authentication ──────────────────────────────
 
-/**
- * Register a new user with email and password.
- * Sends a verification email automatically.
- */
 export async function signUpWithEmail(
   email: string,
   password: string,
@@ -65,52 +34,36 @@ export async function signUpWithEmail(
     email,
     password,
     options: {
-      data: {
-        display_name: displayName || null,
-      },
+      data: { display_name: displayName || null },
       emailRedirectTo: redirectUri,
     },
   });
-
   if (error) throw error;
-
   return data;
 }
 
-/**
- * Sign in with email and password.
- * Returns the session on success.
- */
 export async function signInWithEmail(email: string, password: string) {
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
-
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw error;
 
-  // Update the auth store with session info
   if (data.session) {
     const store = useAuthStore.getState();
     store.setSession(data.session);
     store.setEmailVerified(!!data.user.email_confirmed_at);
   }
-
   return data;
 }
 
-// ── OAuth Authentication ──────────────────────────────
+// ── OAuth Helper ──────────────────────────────────────
 
 /**
- * Sign in with Google OAuth using expo-auth-session.
- * Opens a web browser for the Google OAuth flow, then exchanges
- * the result for a Supabase session.
+ * Opens the OAuth URL in the system browser and waits for a deep link redirect
+ * back to fetch://auth/callback. On Android, openAuthSessionAsync cannot capture
+ * custom scheme redirects reliably, so we use openBrowserAsync + deep link listener.
  */
-export async function signInWithGoogle() {
-  console.log('[AUTH] redirectUri:', redirectUri);
-
+async function openOAuthFlow(provider: 'google' | 'facebook'): Promise<Session> {
   const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
+    provider,
     options: {
       redirectTo: redirectUri,
       skipBrowserRedirect: true,
@@ -120,183 +73,111 @@ export async function signInWithGoogle() {
   if (error) throw error;
   if (!data.url) throw new Error('No OAuth URL returned');
 
-  console.log('[AUTH] OAuth URL:', data.url);
-  const [result, deepLinkUrl] = await Promise.all([
-    Promise.race([
-      WebBrowser.openAuthSessionAsync(data.url, redirectUri),
-      new Promise<{ type: 'timeout'; url?: string }>((resolve) =>
-        setTimeout(() => resolve({ type: 'timeout' }), 25000)
-      ),
-    ]),
-    waitForRedirectUrl('fetch://auth/callback'),
+  console.log(`[AUTH] ${provider} OAuth URL:`, data.url);
+
+  const deepLinkUrl = await Promise.race([
+    new Promise<string | null>((resolve) => {
+      let resolved = false;
+      const sub = Linking.addEventListener('url', ({ url }) => {
+        if (url && url.startsWith('fetch://auth/callback')) {
+          if (!resolved) {
+            resolved = true;
+            sub.remove();
+            resolve(url);
+          }
+        }
+      });
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          sub.remove();
+          resolve(null);
+        }
+      }, 120000);
+    }),
+    WebBrowser.openBrowserAsync(data.url).then(() => null as string | null),
   ]);
-  console.log('[AUTH] Browser result type:', result.type);
 
-  const callbackUrl = result.type === 'success' ? result.url : deepLinkUrl;
+  WebBrowser.dismissBrowser();
 
-  if (callbackUrl) {
-    // Extract the tokens from the callback URL
-    const params = extractParamsFromUrl(callbackUrl);
+  console.log('[AUTH] Deep link result:', deepLinkUrl ? 'received' : 'none');
+
+  if (deepLinkUrl) {
+    const params = extractParamsFromUrl(deepLinkUrl);
     if (params.access_token && params.refresh_token) {
       const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
         access_token: params.access_token,
         refresh_token: params.refresh_token,
       });
-
       if (sessionError) throw sessionError;
-
       if (sessionData.session) {
         const store = useAuthStore.getState();
         store.setSession(sessionData.session);
         store.setEmailVerified(true);
+        return sessionData.session;
       }
-
-      return sessionData;
     }
   }
 
-  // Browser was dismissed, timed out, or redirect wasn't captured cleanly.
-  // OAuth may still have completed; poll for the session briefly.
-  const waitedSession = await waitForSession();
-  if (waitedSession) {
-    console.log('[AUTH] Recovered session by polling after auth session');
+  const session = await waitForSession();
+  if (session) {
+    console.log('[AUTH] Recovered session after OAuth');
     const store = useAuthStore.getState();
-    store.setSession(waitedSession);
+    store.setSession(session);
     store.setEmailVerified(true);
-    return { session: waitedSession, user: waitedSession.user };
+    return session;
   }
 
-  // Final fallback: check immediately for current session.
-  const { data: existingSession } = await supabase.auth.getSession();
-  if (existingSession.session) {
-    console.log('[AUTH] Found existing session after browser dismiss');
+  const { data: existing } = await supabase.auth.getSession();
+  if (existing.session) {
     const store = useAuthStore.getState();
-    store.setSession(existingSession.session);
+    store.setSession(existing.session);
     store.setEmailVerified(true);
-    return { session: existingSession.session, user: existingSession.session.user };
+    return existing.session;
   }
 
-  // Try refreshing in case tokens landed in storage via the auth listener
   const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
   if (!refreshError && refreshed.session) {
-    console.log('[AUTH] Recovered session via refresh after dismiss');
     const store = useAuthStore.getState();
     store.setSession(refreshed.session);
     store.setEmailVerified(true);
-    return { session: refreshed.session, user: refreshed.session.user };
+    return refreshed.session;
   }
 
-  throw new Error('OAuth flow was cancelled or failed');
+  throw new Error(`${provider} login was cancelled or failed`);
 }
 
-/**
- * Sign in with Facebook OAuth using expo-auth-session.
- * Opens a web browser for the Facebook OAuth flow, then exchanges
- * the result for a Supabase session.
- */
+export async function signInWithGoogle() {
+  return openOAuthFlow('google');
+}
+
 export async function signInWithFacebook() {
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: 'facebook',
-    options: {
-      redirectTo: redirectUri,
-      skipBrowserRedirect: true,
-    },
-  });
-
-  if (error) throw error;
-  if (!data.url) throw new Error('No OAuth URL returned');
-
-  // Open the OAuth URL in the system browser
-  const [result, deepLinkUrl] = await Promise.all([
-    Promise.race([
-      WebBrowser.openAuthSessionAsync(data.url, redirectUri),
-      new Promise<{ type: 'timeout'; url?: string }>((resolve) =>
-        setTimeout(() => resolve({ type: 'timeout' }), 25000)
-      ),
-    ]),
-    waitForRedirectUrl('fetch://auth/callback'),
-  ]);
-
-  const callbackUrl = result.type === 'success' ? result.url : deepLinkUrl;
-
-  if (!callbackUrl) {
-    const waitedSession = await waitForSession();
-    if (waitedSession) {
-      const store = useAuthStore.getState();
-      store.setSession(waitedSession);
-      store.setEmailVerified(true);
-      return { session: waitedSession, user: waitedSession.user };
-    }
-    throw new Error('OAuth flow was cancelled, timed out, or failed');
-  }
-
-  // Extract the tokens from the redirect URL
-  const params = extractParamsFromUrl(callbackUrl);
-  if (!params.access_token || !params.refresh_token) {
-    throw new Error('Missing tokens in OAuth callback');
-  }
-
-  // Set the session in Supabase client using the tokens from the redirect
-  const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-    access_token: params.access_token,
-    refresh_token: params.refresh_token,
-  });
-
-  if (sessionError) throw sessionError;
-
-  // Update the auth store
-  if (sessionData.session) {
-    const store = useAuthStore.getState();
-    store.setSession(sessionData.session);
-    store.setEmailVerified(true); // OAuth users are always verified
-  }
-
-  return sessionData;
+  return openOAuthFlow('facebook');
 }
 
 // ── Session Management ──────────────────────────────
 
-/**
- * Sign out the current user.
- * Clears tokens from secure store and resets the auth store.
- */
 export async function signOut() {
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
-
-  // Reset the auth store
   useAuthStore.getState().reset();
 }
 
-/**
- * Get the current session from secure store.
- * Supabase client handles automatic token refresh (configured in supabase.ts).
- */
 export async function getSession(): Promise<Session | null> {
   const { data, error } = await supabase.auth.getSession();
   if (error) throw error;
   return data.session;
 }
 
-/**
- * Manually refresh the session token.
- * Usually not needed since autoRefreshToken is enabled in the Supabase client.
- */
 export async function refreshSession() {
   const { data, error } = await supabase.auth.refreshSession();
   if (error) throw error;
-
   if (data.session) {
     useAuthStore.getState().setSession(data.session);
   }
-
   return data.session;
 }
 
-/**
- * Listen for auth state changes (sign in, sign out, token refresh).
- * Returns an unsubscribe function.
- */
 export function onAuthStateChange(
   callback: (event: AuthChangeEvent, session: Session | null) => void
 ) {
@@ -304,47 +185,30 @@ export function onAuthStateChange(
   return data.subscription;
 }
 
-/**
- * Resend the verification email for the given email address.
- */
 export async function resendVerificationEmail(email: string) {
-  const { error } = await supabase.auth.resend({
-    type: 'signup',
-    email,
-  });
+  const { error } = await supabase.auth.resend({ type: 'signup', email });
   if (error) throw error;
 }
 
 // ── Helpers ──────────────────────────────
 
-/**
- * Extract URL fragment parameters from an OAuth callback URL.
- * Supabase returns tokens in the URL fragment (hash) as:
- * fetch://auth/callback#access_token=...&refresh_token=...&...
- */
 function extractParamsFromUrl(url: string): Record<string, string> {
   const params: Record<string, string> = {};
 
-  // Try hash fragment first (Supabase's default for implicit flow)
   const hashIndex = url.indexOf('#');
   if (hashIndex !== -1) {
     const fragment = url.substring(hashIndex + 1);
-    const searchParams = new URLSearchParams(fragment);
-    searchParams.forEach((value, key) => {
+    new URLSearchParams(fragment).forEach((value, key) => {
       params[key] = value;
     });
   }
 
-  // Also check query params as fallback
   const queryIndex = url.indexOf('?');
   if (queryIndex !== -1) {
     const endIndex = hashIndex !== -1 ? hashIndex : url.length;
     const query = url.substring(queryIndex + 1, endIndex);
-    const searchParams = new URLSearchParams(query);
-    searchParams.forEach((value, key) => {
-      if (!params[key]) {
-        params[key] = value;
-      }
+    new URLSearchParams(query).forEach((value, key) => {
+      if (!params[key]) params[key] = value;
     });
   }
 
