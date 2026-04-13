@@ -64,6 +64,7 @@ export default function SwipeDeckScreen() {
       }
     } catch (err) {
       console.error('[DOGS] Failed to fetch dogs:', err);
+      setDogs([]);
     } finally {
       setLoading(false);
     }

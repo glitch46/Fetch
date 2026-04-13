@@ -6,6 +6,19 @@ import { supabase } from './supabase';
 import { useAuthStore } from '../store/useAuthStore';
 import { router } from 'expo-router';
 
+async function getSessionWithTimeout(timeoutMs = 1500) {
+  try {
+    const timeout = new Promise<null>((resolve) => {
+      setTimeout(() => resolve(null), timeoutMs);
+    });
+    const result = await Promise.race([supabase.auth.getSession(), timeout]);
+    if (!result) return null;
+    return result.data.session;
+  } catch {
+    return null;
+  }
+}
+
 const api = axios.create({
   baseURL: process.env.EXPO_PUBLIC_API_URL,
   timeout: 10000,
@@ -16,10 +29,18 @@ const api = axios.create({
 
 // Request interceptor: attach Supabase JWT from the current session
 api.interceptors.request.use(async (config) => {
-  const { data } = await supabase.auth.getSession();
-  if (data.session?.access_token) {
-    config.headers.Authorization = `Bearer ${data.session.access_token}`;
+  // Prefer in-memory token first to avoid auth storage lock waits.
+  const storeToken = useAuthStore.getState().session?.access_token;
+  if (storeToken) {
+    config.headers.Authorization = `Bearer ${storeToken}`;
+    return config;
   }
+
+  const session = await getSessionWithTimeout();
+  if (session?.access_token) {
+    config.headers.Authorization = `Bearer ${session.access_token}`;
+  }
+
   return config;
 });
 

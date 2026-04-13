@@ -6,12 +6,35 @@
 import { supabase } from './supabase';
 import { useAuthStore } from '../store/useAuthStore';
 import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import type { Session, AuthChangeEvent } from '@supabase/supabase-js';
 
 // OAuth redirect URI must stay fixed and match app.json intent filter + Supabase allowlist.
 const redirectUri = 'fetch://auth/callback';
 
 console.log('[AUTH] Redirect URI:', redirectUri);
+
+async function waitForRedirectUrl(expectedPrefix: string, timeoutMs = 25000): Promise<string | null> {
+  return new Promise((resolve) => {
+    let finished = false;
+
+    const cleanup = (value: string | null) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      subscription.remove();
+      resolve(value);
+    };
+
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      if (url && url.startsWith(expectedPrefix)) {
+        cleanup(url);
+      }
+    });
+
+    const timer = setTimeout(() => cleanup(null), timeoutMs);
+  });
+}
 
 async function waitForSession(maxMs = 20000): Promise<Session | null> {
   const start = Date.now();
@@ -98,17 +121,22 @@ export async function signInWithGoogle() {
   if (!data.url) throw new Error('No OAuth URL returned');
 
   console.log('[AUTH] OAuth URL:', data.url);
-  const result = await Promise.race([
-    WebBrowser.openAuthSessionAsync(data.url, redirectUri),
-    new Promise<{ type: 'timeout'; url?: string }>((resolve) =>
-      setTimeout(() => resolve({ type: 'timeout' }), 25000)
-    ),
+  const [result, deepLinkUrl] = await Promise.all([
+    Promise.race([
+      WebBrowser.openAuthSessionAsync(data.url, redirectUri),
+      new Promise<{ type: 'timeout'; url?: string }>((resolve) =>
+        setTimeout(() => resolve({ type: 'timeout' }), 25000)
+      ),
+    ]),
+    waitForRedirectUrl('fetch://auth/callback'),
   ]);
   console.log('[AUTH] Browser result type:', result.type);
 
-  if (result.type === 'success') {
-    // Extract the tokens from the redirect URL
-    const params = extractParamsFromUrl(result.url);
+  const callbackUrl = result.type === 'success' ? result.url : deepLinkUrl;
+
+  if (callbackUrl) {
+    // Extract the tokens from the callback URL
+    const params = extractParamsFromUrl(callbackUrl);
     if (params.access_token && params.refresh_token) {
       const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
         access_token: params.access_token,
@@ -179,14 +207,19 @@ export async function signInWithFacebook() {
   if (!data.url) throw new Error('No OAuth URL returned');
 
   // Open the OAuth URL in the system browser
-  const result = await Promise.race([
-    WebBrowser.openAuthSessionAsync(data.url, redirectUri),
-    new Promise<{ type: 'timeout'; url?: string }>((resolve) =>
-      setTimeout(() => resolve({ type: 'timeout' }), 25000)
-    ),
+  const [result, deepLinkUrl] = await Promise.all([
+    Promise.race([
+      WebBrowser.openAuthSessionAsync(data.url, redirectUri),
+      new Promise<{ type: 'timeout'; url?: string }>((resolve) =>
+        setTimeout(() => resolve({ type: 'timeout' }), 25000)
+      ),
+    ]),
+    waitForRedirectUrl('fetch://auth/callback'),
   ]);
 
-  if (result.type !== 'success') {
+  const callbackUrl = result.type === 'success' ? result.url : deepLinkUrl;
+
+  if (!callbackUrl) {
     const waitedSession = await waitForSession();
     if (waitedSession) {
       const store = useAuthStore.getState();
@@ -198,7 +231,7 @@ export async function signInWithFacebook() {
   }
 
   // Extract the tokens from the redirect URL
-  const params = extractParamsFromUrl(result.url);
+  const params = extractParamsFromUrl(callbackUrl);
   if (!params.access_token || !params.refresh_token) {
     throw new Error('Missing tokens in OAuth callback');
   }
