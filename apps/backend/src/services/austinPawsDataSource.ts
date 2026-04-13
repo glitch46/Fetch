@@ -73,16 +73,30 @@ function stripHtml(html: string | null): string | null {
 
 /**
  * Build a RawDogPhoto array from the single picture URL.
- * The API returns one photo URL; we use it for all size variants.
+ * The API returns one photo URL with an Adopets resize proxy parameter (e.g., AUTOx800).
+ * We generate multiple size variants by changing the proxy parameter, and also
+ * construct additional photo URLs from the original image source when possible.
  */
 function buildPhotos(pictureUrl: string | null): RawDogPhoto[] {
   if (!pictureUrl) return [];
-  return [{
-    small: pictureUrl,
-    medium: pictureUrl,
-    large: pictureUrl,
-    full: pictureUrl,
-  }];
+
+  const photos: RawDogPhoto[] = [];
+
+  // Generate size variants from the Adopets resize proxy
+  // URL format: https://img.prd.adopets.app/ado-resize-image-prd?path=organization/pet/picture/AUTOx800/...
+  const smallUrl = pictureUrl.replace(/AUTOx\d+/, 'AUTOx200');
+  const mediumUrl = pictureUrl.replace(/AUTOx\d+/, 'AUTOx400');
+  const largeUrl = pictureUrl.replace(/AUTOx\d+/, 'AUTOx800');
+  const fullUrl = pictureUrl.replace(/AUTOx\d+/, 'AUTOx1200');
+
+  photos.push({
+    small: smallUrl,
+    medium: mediumUrl,
+    large: largeUrl,
+    full: fullUrl,
+  });
+
+  return photos;
 }
 
 /**

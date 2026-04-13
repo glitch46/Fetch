@@ -231,7 +231,7 @@ export default function DogProfileScreen() {
           )}
           {dog.last_synced_at && (
             <DetailRow
-              icon="checkmark-shield-outline"
+              icon="shield-checkmark-outline"
               label="Last Verified"
               value={formatLastVerified(dog.last_synced_at)}
             />
