@@ -1,21 +1,54 @@
 // Profile screen — owned by Mobile Agent (implementation)
 // User profile with preferences, notification settings, and logout
 
+import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Switch } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { signOut } from '../../lib/auth';
 import { useAuthStore } from '../../store/useAuthStore';
 import { colors } from '../../constants/colors';
+import { updateNotificationSettings } from '../../lib/notifications';
 import Constants from 'expo-constants';
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { session, user } = useAuthStore();
+  const { session, user, setUser } = useAuthStore();
 
   const displayName = user?.display_name || session?.user?.user_metadata?.display_name || null;
   const email = user?.email || session?.user?.email || '';
   const initial = (displayName || email || '?')[0].toUpperCase();
+
+  const [newMatches, setNewMatches] = React.useState(user?.notification_new_matches ?? true);
+  const [urgentDogs, setUrgentDogs] = React.useState(user?.notification_urgent_dogs ?? false);
+
+  React.useEffect(() => {
+    setNewMatches(user?.notification_new_matches ?? true);
+    setUrgentDogs(user?.notification_urgent_dogs ?? false);
+  }, [user?.notification_new_matches, user?.notification_urgent_dogs]);
+
+  async function handleNotificationToggle(
+    key: 'new_matches' | 'urgent_dogs',
+    value: boolean,
+  ) {
+    const updatedNewMatches = key === 'new_matches' ? value : newMatches;
+    const updatedUrgentDogs = key === 'urgent_dogs' ? value : urgentDogs;
+
+    if (key === 'new_matches') setNewMatches(value);
+    else setUrgentDogs(value);
+
+    const success = await updateNotificationSettings(updatedNewMatches, updatedUrgentDogs);
+    if (!success) {
+      if (key === 'new_matches') setNewMatches(!value);
+      else setUrgentDogs(!value);
+    } else if (user) {
+      setUser({
+        ...user,
+        notification_new_matches: updatedNewMatches,
+        notification_urgent_dogs: updatedUrgentDogs,
+      });
+    }
+  }
 
   async function handleSignOut() {
     try {
@@ -57,7 +90,8 @@ export default function ProfileScreen() {
           <Ionicons name="notifications-outline" size={22} color={colors.secondary} />
           <Text style={styles.menuLabel}>New Match Alerts</Text>
           <Switch
-            value={user?.notification_new_matches ?? true}
+            value={newMatches}
+            onValueChange={(v) => handleNotificationToggle('new_matches', v)}
             trackColor={{ false: colors.border, true: colors.primary }}
             thumbColor="#fff"
           />
@@ -67,7 +101,8 @@ export default function ProfileScreen() {
           <Ionicons name="alert-circle-outline" size={22} color={colors.secondary} />
           <Text style={styles.menuLabel}>Urgent Dog Alerts</Text>
           <Switch
-            value={user?.notification_urgent_dogs ?? false}
+            value={urgentDogs}
+            onValueChange={(v) => handleNotificationToggle('urgent_dogs', v)}
             trackColor={{ false: colors.border, true: colors.primary }}
             thumbColor="#fff"
           />

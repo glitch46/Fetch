@@ -55,7 +55,14 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#F5A623"
+        }
+      ]
     ],
     "extra": {
       "router": {},
