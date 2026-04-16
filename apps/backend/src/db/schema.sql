@@ -47,6 +47,7 @@ CREATE TABLE dogs (
   description       TEXT,
   description_html  TEXT,                                   -- raw HTML description from Austin Paws
   photos            JSONB DEFAULT '[]',
+  videos            JSONB DEFAULT '[]',
   tags              TEXT[] DEFAULT '{}',
   attributes        JSONB DEFAULT '{}',
   environment       JSONB DEFAULT '{}',

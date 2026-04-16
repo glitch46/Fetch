@@ -1,11 +1,12 @@
 // DogCard component — owned by Mobile Agent (implementation)
-// Dog card with photo gallery, match score badge, gradient scrim
+// Dog card with photo/video gallery, match score badge, gradient scrim
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, Dimensions, Pressable } from 'react-native';
 import { Image } from 'expo-image';
+import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
-import type { Dog } from '@fetch/shared';
+import type { Dog, DogPhoto, DogVideo } from '@fetch/shared';
 import { colors } from '../constants/colors';
 import { cleanText } from '../utils/cleanText';
 
@@ -16,33 +17,56 @@ const CARD_HEIGHT = CARD_WIDTH * 1.3;
 // Warm amber blurhash placeholder — matches brand palette
 const BLURHASH = 'L6Pj0^jE.AyE_3t7t7R**0o#DgR4';
 
+type MediaItem =
+  | { type: 'photo'; data: DogPhoto }
+  | { type: 'video'; data: DogVideo };
+
 interface DogCardProps {
   dog: Dog;
   onPress?: () => void;
 }
 
 export default function DogCard({ dog, onPress }: DogCardProps) {
-  const [photoIndex, setPhotoIndex] = useState(0);
-  const photos = dog.photos || [];
-  const currentPhoto = photos[photoIndex]?.large || photos[photoIndex]?.medium || null;
+  const [mediaIndex, setMediaIndex] = useState(0);
+  const videoRef = useRef<Video>(null);
+  const [videoReady, setVideoReady] = useState(false);
+
+  // Build combined media list: photos first, then videos
+  const media: MediaItem[] = [
+    ...(dog.photos || []).map((p) => ({ type: 'photo' as const, data: p })),
+    ...(dog.videos || []).map((v) => ({ type: 'video' as const, data: v })),
+  ];
+
+  const currentMedia = media[mediaIndex] || null;
+  const currentPhotoUrl = currentMedia?.type === 'photo'
+    ? (currentMedia.data.large || currentMedia.data.medium || currentMedia.data.small)
+    : null;
 
   const handleTap = useCallback(
     (locationX: number) => {
-      if (photos.length <= 1) {
-        // Single photo — tap opens profile
+      if (media.length <= 1) {
         onPress?.();
         return;
       }
-      // Multi-photo: left/right edges cycle photos, middle opens profile
+      // Multi-media: left/right edges cycle, middle opens profile
       if (locationX > CARD_WIDTH * 0.67) {
-        setPhotoIndex((i) => (i + 1) % photos.length);
+        setMediaIndex((i) => (i + 1) % media.length);
       } else if (locationX < CARD_WIDTH * 0.33) {
-        setPhotoIndex((i) => (i - 1 + photos.length) % photos.length);
+        setMediaIndex((i) => (i - 1 + media.length) % media.length);
       } else {
         onPress?.();
       }
     },
-    [photos.length, onPress]
+    [media.length, onPress]
+  );
+
+  // Reset video playback when media index changes to a different item
+  const handleMediaChange = useCallback(
+    (newIndex: number) => {
+      setMediaIndex(newIndex);
+      setVideoReady(false);
+    },
+    []
   );
 
   const matchLabel = dog.match_score
@@ -51,14 +75,36 @@ export default function DogCard({ dog, onPress }: DogCardProps) {
       ? 'New Arrival'
       : null;
 
+  const totalMediaCount = media.length;
+  const photoCountForBadge =
+    (dog.photos?.length || 0) + (dog.videos?.length || 0);
+
   return (
     <Pressable
       style={styles.card}
       onPress={(e) => handleTap(e.nativeEvent.locationX)}
     >
-      {currentPhoto ? (
+      {/* Render current media */}
+      {currentMedia?.type === 'video' ? (
+        <Video
+          ref={videoRef}
+          source={{ uri: currentMedia.data.url }}
+          style={styles.photo}
+          resizeMode={ResizeMode.COVER}
+          shouldPlay
+          isMuted
+          isLooping
+          usePoster
+          posterSource={currentMedia.data.thumbnail ? { uri: currentMedia.data.thumbnail } : undefined}
+          posterStyle={styles.photo}
+          onPlaybackStatusUpdate={(status: AVPlaybackStatus) => {
+            if (!status.isLoaded) return;
+            setVideoReady(true);
+          }}
+        />
+      ) : currentPhotoUrl ? (
         <Image
-          source={{ uri: currentPhoto }}
+          source={{ uri: currentPhotoUrl }}
           style={styles.photo}
           contentFit="cover"
           contentPosition="top"
@@ -72,15 +118,23 @@ export default function DogCard({ dog, onPress }: DogCardProps) {
         </View>
       )}
 
-      {/* Photo indicator segments */}
-      {photos.length > 1 && (
+      {/* Video indicator */}
+      {currentMedia?.type === 'video' && (
+        <View style={styles.videoBadge}>
+          <Text style={styles.videoBadgeText}>▶ VIDEO</Text>
+        </View>
+      )}
+
+      {/* Media indicator segments */}
+      {totalMediaCount > 1 && (
         <View style={styles.progressBar}>
-          {photos.map((_, i) => (
+          {media.map((_, i) => (
             <View
               key={i}
               style={[
                 styles.progressSegment,
-                i === photoIndex && styles.progressActive,
+                i === mediaIndex && styles.progressActive,
+                media[i]?.type === 'video' && styles.progressVideo,
               ]}
             />
           ))}
@@ -153,6 +207,23 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: 'Nunito_600SemiBold',
   },
+  videoBadge: {
+    position: 'absolute',
+    top: 10,
+    left: 12,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  videoBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontFamily: 'Nunito_700Bold',
+  },
   progressBar: {
     position: 'absolute',
     top: 10,
@@ -169,6 +240,10 @@ const styles = StyleSheet.create({
   },
   progressActive: {
     backgroundColor: '#fff',
+  },
+  progressVideo: {
+    // Currently inactive segment for a video — no special style needed yet
+    // but keeping the selector for potential future visual differentiation
   },
   matchBadge: {
     position: 'absolute',

@@ -6,7 +6,7 @@ import type { FastifyInstance } from 'fastify';
 import { authenticate } from '../middleware/auth.js';
 import { supabase } from '../db/client.js';
 import { calculateMatchScore } from '../services/matching.js';
-import type { Dog, PreferenceKey, DogPhoto, DogAttributes, DogEnvironment } from '@fetch/shared';
+import type { Dog, PreferenceKey, DogPhoto, DogVideo, DogAttributes, DogEnvironment } from '@fetch/shared';
 
 // ── Helpers ──────────────────────────
 
@@ -28,6 +28,17 @@ function dbRowToDog(
     }
   } catch {
     photos = [];
+  }
+
+  // Parse videos — stored as JSONB string in DB
+  let videos: DogVideo[] = [];
+  try {
+    const raw = typeof row.videos === 'string' ? JSON.parse(row.videos) : row.videos;
+    if (Array.isArray(raw)) {
+      videos = raw as DogVideo[];
+    }
+  } catch {
+    videos = [];
   }
 
   // Parse attributes
@@ -64,6 +75,7 @@ function dbRowToDog(
     description: (row.description as string) || null,
     description_html: (row.description_html as string) || null,
     photos,
+    videos,
     tags: (row.tags as string[]) || [],
     attributes,
     environment,

@@ -58,6 +58,7 @@ export default function SwipeDeckScreen() {
           ...dog,
           name: dog.name.replace(/^\*+/, '').trim(),
           photos: typeof dog.photos === 'string' ? JSON.parse(dog.photos) : dog.photos,
+          videos: typeof dog.videos === 'string' ? JSON.parse(dog.videos as string) : dog.videos,
         }));
         setDogs(items);
         setCurrentIndex(0);

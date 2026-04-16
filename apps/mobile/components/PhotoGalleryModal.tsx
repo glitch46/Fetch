@@ -1,5 +1,5 @@
-// Full-screen photo gallery modal — owned by Mobile Agent
-// Swipe left/right to browse all photos of a dog, tap to close
+// Full-screen media gallery modal — owned by Mobile Agent
+// Swipe left/right to browse photos and videos of a dog, tap to close
 
 import { useState, useCallback } from 'react';
 import {
@@ -13,25 +13,38 @@ import {
   StatusBar,
 } from 'react-native';
 import { Image } from 'expo-image';
+import { Video, ResizeMode } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
-import type { DogPhoto } from '@fetch/shared';
+import type { DogPhoto, DogVideo } from '@fetch/shared';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
+type GalleryMediaItem =
+  | { type: 'photo'; data: DogPhoto }
+  | { type: 'video'; data: DogVideo };
+
 interface PhotoGalleryModalProps {
   visible: boolean;
-  photos: DogPhoto[];
+  media: GalleryMediaItem[];
   initialIndex?: number;
   onClose: () => void;
+  // Legacy support: still accepts photos-only array
+  photos?: DogPhoto[];
 }
 
 export default function PhotoGalleryModal({
   visible,
-  photos,
+  media,
   initialIndex = 0,
   onClose,
+  photos,
 }: PhotoGalleryModalProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
+
+  // Legacy support: if photos prop is passed without media, build media from photos
+  const effectiveMedia: GalleryMediaItem[] = media.length > 0
+    ? media
+    : (photos || []).map((p) => ({ type: 'photo' as const, data: p }));
 
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: Array<{ index: number | null }> }) => {
@@ -43,8 +56,25 @@ export default function PhotoGalleryModal({
   );
 
   const renderItem = useCallback(
-    ({ item }: { item: DogPhoto }) => {
-      const uri = item.full || item.large || item.medium || item.small;
+    ({ item }: { item: GalleryMediaItem }) => {
+      if (item.type === 'video') {
+        return (
+          <View style={styles.slide}>
+            <Video
+              source={{ uri: item.data.url }}
+              style={styles.fullImage}
+              resizeMode={ResizeMode.CONTAIN}
+              shouldPlay
+              isMuted={false}
+              isLooping
+              usePoster
+              posterSource={item.data.thumbnail ? { uri: item.data.thumbnail } : undefined}
+            />
+          </View>
+        );
+      }
+
+      const uri = item.data.full || item.data.large || item.data.medium || item.data.small;
       return (
         <View style={styles.slide}>
           <Image
@@ -59,7 +89,7 @@ export default function PhotoGalleryModal({
     [],
   );
 
-  if (photos.length === 0) return null;
+  if (effectiveMedia.length === 0) return null;
 
   return (
     <Modal
@@ -76,24 +106,24 @@ export default function PhotoGalleryModal({
           <Ionicons name="close" size={28} color="#fff" />
         </TouchableOpacity>
 
-        {/* Photo counter */}
-        {photos.length > 1 && (
+        {/* Media counter */}
+        {effectiveMedia.length > 1 && (
           <View style={styles.counter}>
             <Text style={styles.counterText}>
-              {currentIndex + 1} / {photos.length}
+              {currentIndex + 1} / {effectiveMedia.length}
             </Text>
           </View>
         )}
 
-        {/* Swipeable photo list */}
+        {/* Swipeable media list */}
         <FlatList
-          data={photos}
+          data={effectiveMedia}
           renderItem={renderItem}
           keyExtractor={(_, i) => `gallery-${i}`}
           horizontal
           pagingEnabled
           showsHorizontalScrollIndicator={false}
-          initialScrollIndex={initialIndex}
+          initialScrollIndex={Math.min(initialIndex, effectiveMedia.length - 1)}
           getItemLayout={(_, index) => ({
             length: SCREEN_WIDTH,
             offset: SCREEN_WIDTH * index,
@@ -104,12 +134,16 @@ export default function PhotoGalleryModal({
         />
 
         {/* Dot indicators */}
-        {photos.length > 1 && (
+        {effectiveMedia.length > 1 && (
           <View style={styles.dots}>
-            {photos.map((_, i) => (
+            {effectiveMedia.map((item, i) => (
               <View
                 key={i}
-                style={[styles.dot, i === currentIndex && styles.dotActive]}
+                style={[
+                  styles.dot,
+                  i === currentIndex && styles.dotActive,
+                  item.type === 'video' && styles.dotVideo,
+                ]}
               />
             ))}
           </View>
@@ -180,5 +214,9 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
+  },
+  dotVideo: {
+    // Teal dot to indicate video items in the gallery
+    backgroundColor: 'rgba(26, 127, 116, 0.6)',
   },
 });

@@ -13,6 +13,11 @@ export interface RawDogPhoto {
   full: string;
 }
 
+export interface RawDogVideo {
+  url: string;
+  thumbnail: string | null;
+}
+
 /**
  * Raw dog data as returned by a DataSource.
  * This is the intermediate format between external APIs and our DB schema.
@@ -29,6 +34,7 @@ export interface RawDog {
   color: string | null;
   description: string | null;     // plain text description (HTML stripped)
   photos: RawDogPhoto[];          // photo objects with size variants
+  videos: RawDogVideo[];          // video objects with URL and thumbnail
   tags: string[];                 // normalized behavioral tags (PreferenceKey values + display-only tags)
   adoption_url: string | null;    // adopets.com deep link for this dog
   intake_date: Date | null;       // shelter intake date — used for days_in_shelter

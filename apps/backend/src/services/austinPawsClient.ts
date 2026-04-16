@@ -8,6 +8,12 @@ import type { AxiosInstance } from 'axios';
 const BASE_URL = process.env.AUSTIN_PAWS_BASE_URL || 'https://austinpawsportal.com';
 const API_KEY = process.env.AUSTIN_PAWS_API_KEY || '';
 
+export interface AustinPawsGalleryItem {
+  src: string;
+  uuid: string;
+  type_key: string;
+}
+
 export interface AustinPawsDog {
   uuid: string;
   animal_id: string;
@@ -38,6 +44,7 @@ export interface AustinPawsDog {
   last_fetched_at: string | null;
   is_active: boolean;
   created_at: string | null;
+  gallery_images: AustinPawsGalleryItem[] | null;
 }
 
 /**

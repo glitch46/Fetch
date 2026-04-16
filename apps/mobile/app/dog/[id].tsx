@@ -1,5 +1,5 @@
 // Dog Profile screen — owned by Mobile Agent (implementation)
-// Vertical photo layout interspersed with AI prompt cards
+// Vertical photo/video layout interspersed with AI prompt cards
 
 import { useEffect, useState, useRef } from 'react';
 import {
@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { Image } from 'expo-image';
+import { Video, ResizeMode } from 'expo-av';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
@@ -20,10 +21,14 @@ import PhotoGalleryModal from '../../components/PhotoGalleryModal';
 import AdoptFosterModal from '../../components/AdoptFosterModal';
 import api from '../../lib/api';
 import { colors } from '../../constants/colors';
-import type { Dog } from '@fetch/shared';
+import type { Dog, DogPhoto, DogVideo } from '@fetch/shared';
 import { cleanText } from '../../utils/cleanText';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+type MediaItem =
+  | { type: 'photo'; data: DogPhoto; index: number }
+  | { type: 'video'; data: DogVideo; index: number };
 
 function formatLastVerified(dateStr: string): string {
   const date = new Date(dateStr);
@@ -39,7 +44,7 @@ function formatLastVerified(dateStr: string): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 const HERO_HEIGHT = SCREEN_HEIGHT * 0.55;
-const INTERSPERSED_PHOTO_HEIGHT = SCREEN_HEIGHT * 0.45;
+const INTERSPERSED_MEDIA_HEIGHT = SCREEN_HEIGHT * 0.45;
 
 interface DogPrompt {
   prompt: string;
@@ -59,10 +64,17 @@ export default function DogProfileScreen() {
   const [galleryStartIndex, setGalleryStartIndex] = useState(0);
   const [modalAction, setModalAction] = useState<'adopt' | 'foster' | null>(null);
 
-  const photos = dog?.photos || [];
+  // Build combined media list: all photos then videos
+  const media: MediaItem[] = [
+    ...(dog?.photos || []).map((p, i) => ({ type: 'photo' as const, data: p, index: i })),
+    ...(dog?.videos || []).map((v, i) => ({ type: 'video' as const, data: v, index: (dog?.photos || []).length + i })),
+  ];
 
-  function openGallery(photoIndex: number) {
-    setGalleryStartIndex(photoIndex);
+  const heroMedia = media[0] || null;
+  const remainingMedia = media.slice(1);
+
+  function openGallery(mediaIndex: number) {
+    setGalleryStartIndex(mediaIndex);
     setGalleryVisible(true);
   }
 
@@ -109,10 +121,8 @@ export default function DogProfileScreen() {
 
     let url: string | null = null;
     if (action === 'adopt') {
-      // Adopt: open the dog's adoption listing
       url = dog!.adoption_url || null;
     } else {
-      // Foster: open AAC foster application
       url = dog!.foster_url || 'https://www.austintexas.gov/page/foster-care-application';
     }
 
@@ -121,15 +131,12 @@ export default function DogProfileScreen() {
     }
   }
 
-  const heroPhotoUrl = photos[0]?.full || photos[0]?.large || null;
-  const remainingPhotos = photos.slice(1);
-
-  // Build interspersed photo+prompt content for the "Get to Know Me" section
-  const interspersedItems: Array<{ type: 'photo'; index: number } | { type: 'prompt'; index: number }> = [];
-  const maxItems = Math.max(remainingPhotos.length, prompts.length);
+  // Build interspersed media+prompt content for the "Get to Know Me" section
+  const interspersedItems: Array<{ type: 'media'; item: MediaItem } | { type: 'prompt'; index: number }> = [];
+  const maxItems = Math.max(remainingMedia.length, prompts.length);
   for (let i = 0; i < maxItems; i++) {
-    if (i < remainingPhotos.length) {
-      interspersedItems.push({ type: 'photo', index: i });
+    if (i < remainingMedia.length) {
+      interspersedItems.push({ type: 'media', item: remainingMedia[i] });
     }
     if (i < prompts.length) {
       interspersedItems.push({ type: 'prompt', index: i });
@@ -139,15 +146,26 @@ export default function DogProfileScreen() {
   return (
     <View style={styles.container}>
       <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false}>
-        {/* Hero Photo */}
+        {/* Hero Media */}
         <TouchableOpacity
           activeOpacity={0.9}
           style={styles.heroContainer}
-          onPress={() => photos.length > 0 && openGallery(0)}
+          onPress={() => media.length > 0 && openGallery(0)}
         >
-          {heroPhotoUrl ? (
+          {heroMedia?.type === 'video' ? (
+            <Video
+              source={{ uri: heroMedia.data.url }}
+              style={styles.heroPhoto}
+              resizeMode={ResizeMode.COVER}
+              shouldPlay
+              isMuted
+              isLooping
+              usePoster
+              posterSource={heroMedia.data.thumbnail ? { uri: heroMedia.data.thumbnail } : undefined}
+            />
+          ) : heroMedia?.type === 'photo' ? (
             <Image
-              source={{ uri: heroPhotoUrl }}
+              source={{ uri: heroMedia.data.full || heroMedia.data.large }}
               style={styles.heroPhoto}
               contentFit="cover"
               contentPosition="top"
@@ -159,11 +177,18 @@ export default function DogProfileScreen() {
             </View>
           )}
 
-          {/* Photo count indicator */}
-          {photos.length > 1 && (
+          {/* Video indicator on hero */}
+          {heroMedia?.type === 'video' && (
+            <View style={styles.heroVideoBadge}>
+              <Text style={styles.heroVideoBadgeText}>▶ VIDEO</Text>
+            </View>
+          )}
+
+          {/* Media count indicator */}
+          {media.length > 1 && (
             <View style={styles.photoCountBadge}>
               <Ionicons name="images-outline" size={14} color="#fff" />
-              <Text style={styles.photoCountText}>{photos.length}</Text>
+              <Text style={styles.photoCountText}>{media.length}</Text>
             </View>
           )}
 
@@ -197,7 +222,7 @@ export default function DogProfileScreen() {
           </View>
         )}
 
-        {/* Details Section — moved up */}
+        {/* Details Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Details</Text>
           <DetailRow icon="resize" label="Size" value={dog.size} />
@@ -238,7 +263,7 @@ export default function DogProfileScreen() {
           )}
         </View>
 
-        {/* Characteristics Section — moved up */}
+        {/* Characteristics Section */}
         {dog.tags && dog.tags.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Characteristics</Text>
@@ -252,7 +277,7 @@ export default function DogProfileScreen() {
           </View>
         )}
 
-        {/* Get to Know Me — photos interspersed with AI prompt cards */}
+        {/* Get to Know Me — media interspersed with AI prompt cards */}
         {(interspersedItems.length > 0 || promptsLoading) && (
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Get to Know Me</Text>
@@ -268,29 +293,51 @@ export default function DogProfileScreen() {
         )}
 
         {interspersedItems.map((item) => {
-          if (item.type === 'photo') {
-            const photo = remainingPhotos[item.index];
-            const url = photo?.full || photo?.large || null;
-            if (!url) return null;
-            // item.index is the index within remainingPhotos (0-based),
-            // add 1 to account for the hero photo at index 0
-            const fullIndex = item.index + 1;
-            return (
-              <TouchableOpacity
-                key={`photo-${item.index}`}
-                activeOpacity={0.9}
-                style={styles.interspersedPhotoWrapper}
-                onPress={() => openGallery(fullIndex)}
-              >
-                <Image
-                  source={{ uri: url }}
-                  style={styles.interspersedPhoto}
-                  contentFit="cover"
-                  contentPosition="top"
-                  transition={200}
-                />
-              </TouchableOpacity>
-            );
+          if (item.type === 'media') {
+            const mediaItem = item.item;
+            if (mediaItem.type === 'video') {
+              return (
+                <TouchableOpacity
+                  key={`video-${mediaItem.index}`}
+                  activeOpacity={0.9}
+                  style={styles.interspersedMediaWrapper}
+                  onPress={() => openGallery(mediaItem.index)}
+                >
+                  <Video
+                    source={{ uri: mediaItem.data.url }}
+                    style={styles.interspersedMedia}
+                    resizeMode={ResizeMode.COVER}
+                    shouldPlay
+                    isMuted
+                    isLooping
+                    usePoster
+                    posterSource={mediaItem.data.thumbnail ? { uri: mediaItem.data.thumbnail } : undefined}
+                  />
+                  <View style={styles.videoOverlayBadge}>
+                    <Ionicons name="play-circle" size={24} color="#fff" />
+                  </View>
+                </TouchableOpacity>
+              );
+            } else {
+              const url = mediaItem.data.full || mediaItem.data.large || null;
+              if (!url) return null;
+              return (
+                <TouchableOpacity
+                  key={`photo-${mediaItem.index}`}
+                  activeOpacity={0.9}
+                  style={styles.interspersedMediaWrapper}
+                  onPress={() => openGallery(mediaItem.index)}
+                >
+                  <Image
+                    source={{ uri: url }}
+                    style={styles.interspersedMedia}
+                    contentFit="cover"
+                    contentPosition="top"
+                    transition={200}
+                  />
+                </TouchableOpacity>
+              );
+            }
           } else {
             const p = prompts[item.index];
             return (
@@ -341,10 +388,10 @@ export default function DogProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Full-screen photo gallery */}
+      {/* Full-screen media gallery */}
       <PhotoGalleryModal
         visible={galleryVisible}
-        photos={photos}
+        media={media}
         initialIndex={galleryStartIndex}
         onClose={() => setGalleryVisible(false)}
       />
@@ -452,6 +499,20 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: 'Nunito_600SemiBold',
   },
+  heroVideoBadge: {
+    position: 'absolute',
+    top: 60,
+    left: 16,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  heroVideoBadgeText: {
+    color: '#fff',
+    fontSize: 13,
+    fontFamily: 'Nunito_700Bold',
+  },
   photoCountBadge: {
     position: 'absolute',
     bottom: 12,
@@ -536,14 +597,27 @@ const styles = StyleSheet.create({
     color: colors.text,
     lineHeight: 22,
   },
-  interspersedPhotoWrapper: {
+  interspersedMediaWrapper: {
     paddingHorizontal: 16,
     paddingVertical: 8,
+    position: 'relative',
   },
-  interspersedPhoto: {
+  interspersedMedia: {
     width: '100%',
-    height: INTERSPERSED_PHOTO_HEIGHT,
+    height: INTERSPERSED_MEDIA_HEIGHT,
     borderRadius: 16,
+  },
+  videoOverlayBadge: {
+    position: 'absolute',
+    bottom: 20,
+    right: 28,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   promptSection: {
     paddingHorizontal: 20,

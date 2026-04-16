@@ -24,6 +24,11 @@ export interface DogPhoto {
   full: string;
 }
 
+export interface DogVideo {
+  url: string;
+  thumbnail: string | null;
+}
+
 export interface DogAttributes {
   spayed_neutered: boolean;
   house_trained: boolean;
@@ -49,6 +54,7 @@ export interface Dog {
   description: string | null;
   description_html: string | null;
   photos: DogPhoto[];
+  videos: DogVideo[];
   tags: string[];
   attributes: DogAttributes;
   environment: DogEnvironment;

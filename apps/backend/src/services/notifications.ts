@@ -4,7 +4,7 @@
 import axios from 'axios';
 import { supabase } from '../db/client.js';
 import { calculateMatchScore } from './matching.js';
-import type { Dog, PreferenceKey, DogPhoto, DogAttributes, DogEnvironment } from '@fetch/shared';
+import type { Dog, PreferenceKey, DogPhoto, DogVideo, DogAttributes, DogEnvironment } from '@fetch/shared';
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
@@ -41,6 +41,12 @@ function dbRowToDog(row: Record<string, unknown>): Dog {
     if (Array.isArray(raw)) photos = raw as DogPhoto[];
   } catch { photos = []; }
 
+  let videos: DogVideo[] = [];
+  try {
+    const raw = typeof row.videos === 'string' ? JSON.parse(row.videos) : row.videos;
+    if (Array.isArray(raw)) videos = raw as DogVideo[];
+  } catch { videos = []; }
+
   let attributes: DogAttributes = { spayed_neutered: false, house_trained: false, special_needs: false, shots_current: false };
   try {
     const raw = typeof row.attributes === 'string' ? JSON.parse(row.attributes) : row.attributes;
@@ -65,6 +71,7 @@ function dbRowToDog(row: Record<string, unknown>): Dog {
     description: (row.description as string) || null,
     description_html: (row.description_html as string) || null,
     photos,
+    videos,
     tags: (row.tags as string[]) || [],
     attributes,
     environment,

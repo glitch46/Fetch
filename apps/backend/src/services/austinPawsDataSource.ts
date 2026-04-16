@@ -4,8 +4,8 @@
 
 import { fetchAllDogs } from './austinPawsClient.js';
 import { normalizeAustinPawsKeys } from './tagNormalization.js';
-import type { DataSource, RawDog, RawDogPhoto, AgeGroup, DogSize, DogGender } from './datasource.js';
-import type { AustinPawsDog } from './austinPawsClient.js';
+import type { DataSource, RawDog, RawDogPhoto, RawDogVideo, AgeGroup, DogSize, DogGender } from './datasource.js';
+import type { AustinPawsDog, AustinPawsGalleryItem } from './austinPawsClient.js';
 
 const ADOPETS_PET_URL = 'https://adopt.adopets.com/pet';
 
@@ -72,31 +72,54 @@ function stripHtml(html: string | null): string | null {
 }
 
 /**
- * Build a RawDogPhoto array from the single picture URL.
- * The API returns one photo URL with an Adopets resize proxy parameter (e.g., AUTOx800).
- * We generate multiple size variants by changing the proxy parameter, and also
- * construct additional photo URLs from the original image source when possible.
+ * Generate size variants from an Adopets resize proxy URL.
+ * URL format: https://img.prd.adopets.app/ado-resize-image-prd?path=.../AUTOx800/...
  */
-function buildPhotos(pictureUrl: string | null): RawDogPhoto[] {
+function sizeVariants(url: string): RawDogPhoto {
+  return {
+    small: url.replace(/AUTOx\d+/, 'AUTOx200'),
+    medium: url.replace(/AUTOx\d+/, 'AUTOx400'),
+    large: url.replace(/AUTOx\d+/, 'AUTOx800'),
+    full: url.replace(/AUTOx\d+/, 'AUTOx1200'),
+  };
+}
+
+/**
+ * Build a RawDogPhoto array from gallery_images and fallback picture URL.
+ * When gallery_images is available and contains IMAGE items, use those as distinct photos.
+ * Otherwise fall back to generating size variants from the single picture URL.
+ */
+function buildPhotos(pictureUrl: string | null, galleryImages: AustinPawsGalleryItem[] | null): RawDogPhoto[] {
+  // Try gallery_images first
+  if (galleryImages && galleryImages.length > 0) {
+    const imageItems = galleryImages.filter((item) => item.type_key === 'IMAGE');
+    if (imageItems.length > 0) {
+      return imageItems.map((item) => sizeVariants(item.src));
+    }
+  }
+
+  // Fallback to single picture URL
   if (!pictureUrl) return [];
+  return [sizeVariants(pictureUrl)];
+}
 
-  const photos: RawDogPhoto[] = [];
+/**
+ * Build a RawDogVideo array from gallery_images items with type_key "VIDEO".
+ * Each video gets the first IMAGE item as its thumbnail.
+ */
+function buildVideos(galleryImages: AustinPawsGalleryItem[] | null): RawDogVideo[] {
+  if (!galleryImages || galleryImages.length === 0) return [];
 
-  // Generate size variants from the Adopets resize proxy
-  // URL format: https://img.prd.adopets.app/ado-resize-image-prd?path=organization/pet/picture/AUTOx800/...
-  const smallUrl = pictureUrl.replace(/AUTOx\d+/, 'AUTOx200');
-  const mediumUrl = pictureUrl.replace(/AUTOx\d+/, 'AUTOx400');
-  const largeUrl = pictureUrl.replace(/AUTOx\d+/, 'AUTOx800');
-  const fullUrl = pictureUrl.replace(/AUTOx\d+/, 'AUTOx1200');
+  const videoItems = galleryImages.filter((item) => item.type_key === 'VIDEO');
+  if (videoItems.length === 0) return [];
 
-  photos.push({
-    small: smallUrl,
-    medium: mediumUrl,
-    large: largeUrl,
-    full: fullUrl,
-  });
+  const firstImage = galleryImages.find((item) => item.type_key === 'IMAGE');
+  const thumbnail = firstImage ? firstImage.src : null;
 
-  return photos;
+  return videoItems.map((item) => ({
+    url: item.src,
+    thumbnail,
+  }));
 }
 
 /**
@@ -115,7 +138,8 @@ function toRawDog(dog: AustinPawsDog): RawDog {
     gender: mapGender(dog.sex),
     color: null,
     description: stripHtml(dog.description_html),
-    photos: buildPhotos(dog.picture),
+    photos: buildPhotos(dog.picture, dog.gallery_images),
+    videos: buildVideos(dog.gallery_images),
     tags: normalizedTags,
     adoption_url: `${ADOPETS_PET_URL}/${dog.uuid}`,
     intake_date: dog.shelter_intake_date ? new Date(dog.shelter_intake_date) : null,
