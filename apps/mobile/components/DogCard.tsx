@@ -1,10 +1,9 @@
-// DogCard component — owned by Mobile Agent (implementation)
-// Dog card with photo/video gallery, match score badge, gradient scrim
+// DogCard component — media gallery with photo/YouTube support
+// Photos render natively, YouTube videos show a thumbnail with play overlay
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Dimensions, Pressable } from 'react-native';
 import { Image } from 'expo-image';
-import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { Dog, DogPhoto, DogVideo } from '@fetch/shared';
 import { colors } from '../constants/colors';
@@ -14,7 +13,6 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH - 32;
 const CARD_HEIGHT = CARD_WIDTH * 1.3;
 
-// Warm amber blurhash placeholder — matches brand palette
 const BLURHASH = 'L6Pj0^jE.AyE_3t7t7R**0o#DgR4';
 
 type MediaItem =
@@ -28,10 +26,7 @@ interface DogCardProps {
 
 export default function DogCard({ dog, onPress }: DogCardProps) {
   const [mediaIndex, setMediaIndex] = useState(0);
-  const videoRef = useRef<Video>(null);
-  const [videoReady, setVideoReady] = useState(false);
 
-  // Build combined media list: photos first, then videos
   const media: MediaItem[] = [
     ...(dog.photos || []).map((p) => ({ type: 'photo' as const, data: p })),
     ...(dog.videos || []).map((v) => ({ type: 'video' as const, data: v })),
@@ -48,7 +43,6 @@ export default function DogCard({ dog, onPress }: DogCardProps) {
         onPress?.();
         return;
       }
-      // Multi-media: left/right edges cycle, middle opens profile
       if (locationX > CARD_WIDTH * 0.67) {
         setMediaIndex((i) => (i + 1) % media.length);
       } else if (locationX < CARD_WIDTH * 0.33) {
@@ -60,48 +54,39 @@ export default function DogCard({ dog, onPress }: DogCardProps) {
     [media.length, onPress]
   );
 
-  // Reset video playback when media index changes to a different item
-  const handleMediaChange = useCallback(
-    (newIndex: number) => {
-      setMediaIndex(newIndex);
-      setVideoReady(false);
-    },
-    []
-  );
-
   const matchLabel = dog.match_score
     ? `${dog.match_score}% Match`
     : dog.days_in_shelter != null && dog.days_in_shelter <= 7
       ? 'New Arrival'
       : null;
 
-  const totalMediaCount = media.length;
-  const photoCountForBadge =
-    (dog.photos?.length || 0) + (dog.videos?.length || 0);
-
   return (
     <Pressable
       style={styles.card}
       onPress={(e) => handleTap(e.nativeEvent.locationX)}
     >
-      {/* Render current media */}
       {currentMedia?.type === 'video' ? (
-        <Video
-          ref={videoRef}
-          source={{ uri: currentMedia.data.url }}
-          style={styles.photo}
-          resizeMode={ResizeMode.COVER}
-          shouldPlay
-          isMuted
-          isLooping
-          usePoster
-          posterSource={currentMedia.data.thumbnail ? { uri: currentMedia.data.thumbnail } : undefined}
-          posterStyle={styles.photo}
-          onPlaybackStatusUpdate={(status: AVPlaybackStatus) => {
-            if (!status.isLoaded) return;
-            setVideoReady(true);
-          }}
-        />
+        <View style={styles.photo}>
+          {currentMedia.data.thumbnail ? (
+            <Image
+              source={{ uri: currentMedia.data.thumbnail }}
+              style={styles.photo}
+              contentFit="cover"
+              contentPosition="top"
+              placeholder={{ blurhash: BLURHASH }}
+              cachePolicy="memory-disk"
+            />
+          ) : (
+            <View style={[styles.photo, styles.noPhoto]}>
+              <Text style={styles.noPhotoText}>Video</Text>
+            </View>
+          )}
+          <View style={styles.playOverlay}>
+            <View style={styles.playCircle}>
+              <Text style={styles.playArrow}>▶</Text>
+            </View>
+          </View>
+        </View>
       ) : currentPhotoUrl ? (
         <Image
           source={{ uri: currentPhotoUrl }}
@@ -118,7 +103,7 @@ export default function DogCard({ dog, onPress }: DogCardProps) {
         </View>
       )}
 
-      {/* Video indicator */}
+      {/* Video indicator badge */}
       {currentMedia?.type === 'video' && (
         <View style={styles.videoBadge}>
           <Text style={styles.videoBadgeText}>▶ VIDEO</Text>
@@ -126,15 +111,14 @@ export default function DogCard({ dog, onPress }: DogCardProps) {
       )}
 
       {/* Media indicator segments */}
-      {totalMediaCount > 1 && (
+      {media.length > 1 && (
         <View style={styles.progressBar}>
-          {media.map((_, i) => (
+          {media.map((item, i) => (
             <View
               key={i}
               style={[
                 styles.progressSegment,
                 i === mediaIndex && styles.progressActive,
-                media[i]?.type === 'video' && styles.progressVideo,
               ]}
             />
           ))}
@@ -207,6 +191,30 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: 'Nunito_600SemiBold',
   },
+  playOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  playCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  playArrow: {
+    color: '#fff',
+    fontSize: 24,
+    marginLeft: 4,
+  },
   videoBadge: {
     position: 'absolute',
     top: 10,
@@ -215,9 +223,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
   },
   videoBadgeText: {
     color: '#fff',
@@ -240,10 +245,6 @@ const styles = StyleSheet.create({
   },
   progressActive: {
     backgroundColor: '#fff',
-  },
-  progressVideo: {
-    // Currently inactive segment for a video — no special style needed yet
-    // but keeping the selector for potential future visual differentiation
   },
   matchBadge: {
     position: 'absolute',

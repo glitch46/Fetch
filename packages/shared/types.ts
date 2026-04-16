@@ -27,6 +27,7 @@ export interface DogPhoto {
 export interface DogVideo {
   url: string;
   thumbnail: string | null;
+  host: 'youtube' | 'vimeo' | 'direct';
 }
 
 export interface DogAttributes {

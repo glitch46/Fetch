@@ -16,6 +16,7 @@ export interface RawDogPhoto {
 export interface RawDogVideo {
   url: string;
   thumbnail: string | null;
+  host: 'youtube' | 'vimeo' | 'direct';
 }
 
 /**

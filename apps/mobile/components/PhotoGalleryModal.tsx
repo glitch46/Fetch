@@ -1,5 +1,5 @@
-// Full-screen media gallery modal — owned by Mobile Agent
-// Swipe left/right to browse photos and videos of a dog, tap to close
+// Full-screen media gallery modal — photos and YouTube videos
+// Swipe left/right to browse, tap to close
 
 import { useState, useCallback } from 'react';
 import {
@@ -13,7 +13,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { Video, ResizeMode } from 'expo-av';
+import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import type { DogPhoto, DogVideo } from '@fetch/shared';
 
@@ -28,7 +28,6 @@ interface PhotoGalleryModalProps {
   media: GalleryMediaItem[];
   initialIndex?: number;
   onClose: () => void;
-  // Legacy support: still accepts photos-only array
   photos?: DogPhoto[];
 }
 
@@ -41,7 +40,6 @@ export default function PhotoGalleryModal({
 }: PhotoGalleryModalProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
 
-  // Legacy support: if photos prop is passed without media, build media from photos
   const effectiveMedia: GalleryMediaItem[] = media.length > 0
     ? media
     : (photos || []).map((p) => ({ type: 'photo' as const, data: p }));
@@ -58,17 +56,16 @@ export default function PhotoGalleryModal({
   const renderItem = useCallback(
     ({ item }: { item: GalleryMediaItem }) => {
       if (item.type === 'video') {
+        const embedUrl = item.data.url;
         return (
           <View style={styles.slide}>
-            <Video
-              source={{ uri: item.data.url }}
-              style={styles.fullImage}
-              resizeMode={ResizeMode.CONTAIN}
-              shouldPlay
-              isMuted={false}
-              isLooping
-              usePoster
-              posterSource={item.data.thumbnail ? { uri: item.data.thumbnail } : undefined}
+            <WebView
+              source={{ uri: embedUrl }}
+              style={styles.videoPlayer}
+              allowsInlineMediaPlayback
+              mediaPlaybackRequiresUserAction={false}
+              scrollEnabled={false}
+              bounces={false}
             />
           </View>
         );
@@ -194,6 +191,10 @@ const styles = StyleSheet.create({
     width: SCREEN_WIDTH,
     height: SCREEN_HEIGHT * 0.75,
   },
+  videoPlayer: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT * 0.75,
+  },
   dots: {
     position: 'absolute',
     bottom: 60,
@@ -216,7 +217,6 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   dotVideo: {
-    // Teal dot to indicate video items in the gallery
     backgroundColor: 'rgba(26, 127, 116, 0.6)',
   },
 });

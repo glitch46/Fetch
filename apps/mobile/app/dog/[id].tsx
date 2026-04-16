@@ -11,7 +11,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { Video, ResizeMode } from 'expo-av';
+import { WebView } from 'react-native-webview';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
@@ -153,16 +153,27 @@ export default function DogProfileScreen() {
           onPress={() => media.length > 0 && openGallery(0)}
         >
           {heroMedia?.type === 'video' ? (
-            <Video
-              source={{ uri: heroMedia.data.url }}
-              style={styles.heroPhoto}
-              resizeMode={ResizeMode.COVER}
-              shouldPlay
-              isMuted
-              isLooping
-              usePoster
-              posterSource={heroMedia.data.thumbnail ? { uri: heroMedia.data.thumbnail } : undefined}
-            />
+            <View style={styles.heroPhoto}>
+              {heroMedia.data.thumbnail ? (
+                <Image
+                  source={{ uri: heroMedia.data.thumbnail }}
+                  style={styles.heroPhoto}
+                  contentFit="cover"
+                  contentPosition="top"
+                  placeholder={{ blurhash: 'L6Pj0^jE.AyE_3t7t7R**0o#DgR4' }}
+                  cachePolicy="memory-disk"
+                />
+              ) : (
+                <View style={[styles.heroPhoto, styles.noPhoto]}>
+                  <Text style={styles.noPhotoText}>Video</Text>
+                </View>
+              )}
+              <View style={styles.heroPlayOverlay}>
+                <View style={styles.playCircle}>
+                  <Text style={styles.playArrow}>▶</Text>
+                </View>
+              </View>
+            </View>
           ) : heroMedia?.type === 'photo' ? (
             <Image
               source={{ uri: heroMedia.data.full || heroMedia.data.large }}
@@ -303,16 +314,19 @@ export default function DogProfileScreen() {
                   style={styles.interspersedMediaWrapper}
                   onPress={() => openGallery(mediaItem.index)}
                 >
-                  <Video
-                    source={{ uri: mediaItem.data.url }}
-                    style={styles.interspersedMedia}
-                    resizeMode={ResizeMode.COVER}
-                    shouldPlay
-                    isMuted
-                    isLooping
-                    usePoster
-                    posterSource={mediaItem.data.thumbnail ? { uri: mediaItem.data.thumbnail } : undefined}
-                  />
+                  {mediaItem.data.thumbnail ? (
+                    <Image
+                      source={{ uri: mediaItem.data.thumbnail }}
+                      style={styles.interspersedMedia}
+                      contentFit="cover"
+                      contentPosition="top"
+                      transition={200}
+                    />
+                  ) : (
+                    <View style={[styles.interspersedMedia, styles.noPhoto]}>
+                      <Text style={styles.noPhotoText}>Video</Text>
+                    </View>
+                  )}
                   <View style={styles.videoOverlayBadge}>
                     <Ionicons name="play-circle" size={24} color="#fff" />
                   </View>
@@ -512,6 +526,30 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 13,
     fontFamily: 'Nunito_700Bold',
+  },
+  heroPlayOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  playCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  playArrow: {
+    color: '#fff',
+    fontSize: 24,
+    marginLeft: 4,
   },
   photoCountBadge: {
     position: 'absolute',

@@ -47,9 +47,10 @@ async function main() {
   // Manual sync trigger for development
   fastify.get('/sync', async (request, reply) => {
     try {
-      const { syncDogs } = await import('./services/dogSync.js');
+      const { syncDogs, verifyExistingDogs } = await import('./services/dogSync.js');
       const newDogIds = await syncDogs();
-      return { status: 'ok', newDogs: newDogIds.length, ids: newDogIds };
+      const unavailableCount = await verifyExistingDogs();
+      return { status: 'ok', newDogs: newDogIds.length, ids: newDogIds, markedUnavailable: unavailableCount };
     } catch (err: any) {
       request.log.error(err);
       return reply.status(500).send({ status: 'error', message: err.message });

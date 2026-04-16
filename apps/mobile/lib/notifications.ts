@@ -37,7 +37,8 @@ export async function getExpoPushToken(): Promise<string | null> {
     });
     return data;
   } catch (err) {
-    console.error('[NOTIFICATIONS] Error getting push token:', err);
+    // FCM not configured on Android — expected until Firebase credentials are added
+    console.warn('[NOTIFICATIONS] Push token unavailable (FCM not configured):', (err as Error).message);
     return null;
   }
 }
