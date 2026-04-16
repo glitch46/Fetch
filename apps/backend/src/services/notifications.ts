@@ -1,10 +1,10 @@
-// Push notifications service — owned by Backend Agent (implementation)
-// Sends Expo Push Notifications via the Expo Push API
+// Push notifications service — sends Expo Push Notifications
 
 import axios from 'axios';
 import { supabase } from '../db/client.js';
 import { calculateMatchScore } from './matching.js';
-import type { Dog, PreferenceKey, DogPhoto, DogVideo, DogAttributes, DogEnvironment } from '@fetch/shared';
+import { dbRowToDog } from './dogMapper.js';
+import type { Dog, PreferenceKey } from '@fetch/shared';
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
@@ -27,72 +27,10 @@ export async function sendPushNotification(message: PushMessage): Promise<void> 
 export async function sendBatchPushNotifications(messages: PushMessage[]): Promise<void> {
   if (messages.length === 0) return;
 
-  // Expo supports batching up to 100 notifications per request
   for (let i = 0; i < messages.length; i += 100) {
     const batch = messages.slice(i, i + 100);
     await axios.post(EXPO_PUSH_URL, batch);
   }
-}
-
-function dbRowToDog(row: Record<string, unknown>): Dog {
-  let photos: DogPhoto[] = [];
-  try {
-    const raw = typeof row.photos === 'string' ? JSON.parse(row.photos) : row.photos;
-    if (Array.isArray(raw)) photos = raw as DogPhoto[];
-  } catch { photos = []; }
-
-  let videos: DogVideo[] = [];
-  try {
-    const raw = typeof row.videos === 'string' ? JSON.parse(row.videos) : row.videos;
-    if (Array.isArray(raw)) videos = raw as DogVideo[];
-  } catch { videos = []; }
-
-  let attributes: DogAttributes = { spayed_neutered: false, house_trained: false, special_needs: false, shots_current: false };
-  try {
-    const raw = typeof row.attributes === 'string' ? JSON.parse(row.attributes) : row.attributes;
-    if (raw && typeof raw === 'object') attributes = raw as DogAttributes;
-  } catch { /* keep defaults */ }
-
-  let environment: DogEnvironment = { children: null, dogs: null, cats: null };
-  try {
-    const raw = typeof row.environment === 'string' ? JSON.parse(row.environment) : row.environment;
-    if (raw && typeof raw === 'object') environment = raw as DogEnvironment;
-  } catch { /* keep defaults */ }
-
-  return {
-    id: row.id as string,
-    external_id: row.external_id as string,
-    name: row.name as string,
-    breed_primary: (row.breed_primary as string) || null,
-    breed_secondary: (row.breed_secondary as string) || null,
-    age: row.age as Dog['age'],
-    size: row.size as Dog['size'],
-    gender: row.gender as Dog['gender'],
-    description: (row.description as string) || null,
-    description_html: (row.description_html as string) || null,
-    photos,
-    videos,
-    tags: (row.tags as string[]) || [],
-    attributes,
-    environment,
-    adoption_url: (row.adoption_url as string) || null,
-    foster_url: 'https://www.austintexas.gov/page/foster-care-application',
-    organization_id: (row.organization_id as string) || 'TX514',
-    status: row.status as Dog['status'],
-    published_at: (row.published_at as string) || null,
-    match_score: null,
-    matched_preferences: [],
-    prompts: (row.prompts as Dog['prompts']) || null,
-    days_in_shelter: (row.days_in_shelter as number) ?? null,
-    last_synced_at: (row.last_synced_at as string) || null,
-    dot_color: (row.dot_color as string) || null,
-    kennel_number: (row.kennel_number as string) || null,
-    location: (row.location as string) || null,
-    is_urgent: (row.is_urgent as boolean) || false,
-    eligible_for_foster: (row.eligible_for_foster as boolean | null) ?? null,
-    adopter_notes: (row.adopter_notes as string) || null,
-    foster: (row.foster as boolean) || false,
-  };
 }
 
 /**

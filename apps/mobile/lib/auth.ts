@@ -10,8 +10,6 @@ import type { Session, AuthChangeEvent } from '@supabase/supabase-js';
 
 const redirectUri = 'fetch://auth/callback';
 
-console.log('[AUTH] Redirect URI:', redirectUri);
-
 async function waitForSession(maxMs = 15000): Promise<Session | null> {
   const start = Date.now();
   while (Date.now() - start < maxMs) {
