@@ -9,6 +9,9 @@ node_modules/
 # OAuth credential files (Google client secret JSON downloads)
 client_secret*.json
 
+# Firebase credentials (admin SDK is secret, google-services.json is public & needed for build)
+*firebase-adminsdk*.json
+
 # Expo
 .expo/
 dist/
