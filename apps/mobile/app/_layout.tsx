@@ -20,7 +20,6 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as Linking from 'expo-linking';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { colors } from '../constants/colors';
-import { registerPushToken } from '../lib/notifications';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -115,10 +114,6 @@ async function handleOAuthCallback(url: string) {
           store.setHasCompletedOnboarding(true);
         }
       }
-
-      registerPushToken().catch((err) =>
-        console.error('[NOTIFICATIONS] OAuth registration failed:', err),
-      );
     }
   } catch (err) {
     console.error('[DEEPLINK] Error processing callback:', err);
@@ -191,10 +186,6 @@ export default function RootLayout() {
               setHasCompletedOnboarding(true);
             }
           }
-
-          registerPushToken().catch((err) =>
-            console.error('[NOTIFICATIONS] Background registration failed:', err),
-          );
         }
       } catch (err) {
         console.error('[AUTH] Initialization error:', err);
@@ -219,10 +210,6 @@ export default function RootLayout() {
         }
         setSession(session);
         setEmailVerified(!!session.user.email_confirmed_at);
-
-        registerPushToken().catch((err) =>
-          console.error('[NOTIFICATIONS] Auth state registration failed:', err),
-        );
       } else if (event === 'SIGNED_OUT') {
         reset();
       } else if (event === 'TOKEN_REFRESHED' && session) {

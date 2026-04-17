@@ -6,11 +6,11 @@ node_modules/
 .env.local
 .env.*.local
 
-# OAuth credential files (Google client secret JSON downloads)
+# OAuth and Firebase credentials
 client_secret*.json
-
-# Firebase credentials (admin SDK is secret, google-services.json is public & needed for build)
 *firebase-adminsdk*.json
+google-services.json
+credentials.json
 
 # Expo
 .expo/
