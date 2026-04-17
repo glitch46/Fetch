@@ -1,7 +1,7 @@
 // Full-screen media gallery modal — photos and YouTube videos
 // Swipe left/right to browse, tap to close
 
-import { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,9 +13,20 @@ import {
   StatusBar,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import type { DogPhoto, DogVideo } from '@fetch/shared';
+
+// Lazy-load WebView so the native module isn't required at startup
+// (prevents crash on Expo Go and during route registration)
+let WebViewComponent: typeof import('react-native-webview').WebView | null = null;
+
+async function loadWebView() {
+  if (!WebViewComponent) {
+    const mod = await import('react-native-webview');
+    WebViewComponent = mod.WebView;
+  }
+  return WebViewComponent;
+}
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -56,19 +67,7 @@ export default function PhotoGalleryModal({
   const renderItem = useCallback(
     ({ item }: { item: GalleryMediaItem }) => {
       if (item.type === 'video') {
-        const embedUrl = item.data.url;
-        return (
-          <View style={styles.slide}>
-            <WebView
-              source={{ uri: embedUrl }}
-              style={styles.videoPlayer}
-              allowsInlineMediaPlayback
-              mediaPlaybackRequiresUserAction={false}
-              scrollEnabled={false}
-              bounces={false}
-            />
-          </View>
-        );
+        return <LazyWebView key="video" url={item.data.url} />;
       }
 
       const uri = item.data.full || item.data.large || item.data.medium || item.data.small;
@@ -150,6 +149,55 @@ export default function PhotoGalleryModal({
   );
 }
 
+// Lazy-loaded WebView component — only loads react-native-webview when needed
+function LazyWebView({ url }: { url: string }) {
+  const [WebViewModule, setWebViewModule] = useState<typeof import('react-native-webview').WebView | null>(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    import('react-native-webview')
+      .then((mod) => { if (mounted) setWebViewModule(() => mod.WebView); })
+      .catch(() => { if (mounted) setError(true); });
+    return () => { mounted = false; };
+  }, []);
+
+  if (error) {
+    return (
+      <View style={styles.slide}>
+        <View style={styles.videoFallback}>
+          <Ionicons name="play-circle" size={48} color="#fff" />
+          <Text style={styles.videoFallbackText}>Video unavailable</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (!WebViewModule) {
+    return (
+      <View style={styles.slide}>
+        <View style={styles.videoFallback}>
+          <Ionicons name="play-circle" size={48} color="#fff" />
+          <Text style={styles.videoFallbackText}>Loading video...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.slide}>
+      <WebViewModule
+        source={{ uri: url }}
+        style={styles.videoPlayer}
+        allowsInlineMediaPlayback
+        mediaPlaybackRequiresUserAction={false}
+        scrollEnabled={false}
+        bounces={false}
+      />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -218,5 +266,16 @@ const styles = StyleSheet.create({
   },
   dotVideo: {
     backgroundColor: 'rgba(26, 127, 116, 0.6)',
+  },
+  videoFallback: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+  },
+  videoFallbackText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 15,
+    fontFamily: 'Nunito_600SemiBold',
   },
 });

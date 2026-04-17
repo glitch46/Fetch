@@ -11,7 +11,6 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { WebView } from 'react-native-webview';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
