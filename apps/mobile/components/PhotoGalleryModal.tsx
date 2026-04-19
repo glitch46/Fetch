@@ -11,22 +11,11 @@ import {
   TouchableOpacity,
   FlatList,
   StatusBar,
+  Linking,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import type { DogPhoto, DogVideo } from '@fetch/shared';
-
-// Lazy-load WebView so the native module isn't required at startup
-// (prevents crash on Expo Go and during route registration)
-let WebViewComponent: typeof import('react-native-webview').WebView | null = null;
-
-async function loadWebView() {
-  if (!WebViewComponent) {
-    const mod = await import('react-native-webview');
-    WebViewComponent = mod.WebView;
-  }
-  return WebViewComponent;
-}
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -154,6 +143,15 @@ function LazyWebView({ url }: { url: string }) {
   const [WebViewModule, setWebViewModule] = useState<typeof import('react-native-webview').WebView | null>(null);
   const [error, setError] = useState(false);
 
+  const playableUrl = React.useMemo(() => {
+    const match = url.match(/youtube\.com\/embed\/([^?&/]+)/i);
+    if (!match) return url;
+    const videoId = match[1];
+    // YouTube embed URLs can throw Android Error 153 in WebView.
+    // watch URLs are more reliable in in-app WebViews.
+    return `https://www.youtube.com/watch?v=${videoId}`;
+  }, [url]);
+
   useEffect(() => {
     let mounted = true;
     import('react-native-webview')
@@ -168,6 +166,14 @@ function LazyWebView({ url }: { url: string }) {
         <View style={styles.videoFallback}>
           <Ionicons name="play-circle" size={48} color="#fff" />
           <Text style={styles.videoFallbackText}>Video unavailable</Text>
+          <TouchableOpacity
+            style={styles.videoFallbackButton}
+            onPress={() => {
+              Linking.openURL(playableUrl).catch(() => undefined);
+            }}
+          >
+            <Text style={styles.videoFallbackButtonText}>Open in YouTube</Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -187,12 +193,16 @@ function LazyWebView({ url }: { url: string }) {
   return (
     <View style={styles.slide}>
       <WebViewModule
-        source={{ uri: url }}
+        source={{ uri: playableUrl }}
         style={styles.videoPlayer}
         allowsInlineMediaPlayback
         mediaPlaybackRequiresUserAction={false}
         scrollEnabled={false}
         bounces={false}
+        javaScriptEnabled
+        domStorageEnabled
+        onError={() => setError(true)}
+        onHttpError={() => setError(true)}
       />
     </View>
   );
@@ -277,5 +287,17 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.7)',
     fontSize: 15,
     fontFamily: 'Nunito_600SemiBold',
+  },
+  videoFallbackButton: {
+    marginTop: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
+  videoFallbackButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontFamily: 'Nunito_700Bold',
   },
 });
