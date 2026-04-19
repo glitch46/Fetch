@@ -9,6 +9,7 @@ import {
   ScrollView,
   Dimensions,
   TouchableOpacity,
+  Linking,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -42,6 +43,16 @@ function formatLastVerified(dateStr: string): string {
   if (diffDays < 7) return `${diffDays} days ago`;
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
+function toYouTubeWatchUrl(embedUrl: string): string {
+  const match = embedUrl.match(/youtube\.com\/embed\/([^?&/]+)/i);
+  if (match) return `https://www.youtube.com/watch?v=${match[1]}`;
+  return embedUrl;
+}
+
+function openVideoExternally(url: string) {
+  Linking.openURL(toYouTubeWatchUrl(url)).catch(() => undefined);
+}
+
 const HERO_HEIGHT = SCREEN_HEIGHT * 0.55;
 const INTERSPERSED_MEDIA_HEIGHT = SCREEN_HEIGHT * 0.45;
 
@@ -69,11 +80,14 @@ export default function DogProfileScreen() {
     ...(dog?.videos || []).map((v, i) => ({ type: 'video' as const, data: v, index: (dog?.photos || []).length + i })),
   ];
 
+  // Photos-only list for the gallery modal (videos open externally)
+  const photosOnly: MediaItem[] = media.filter((m) => m.type === 'photo');
+
   const heroMedia = media[0] || null;
   const remainingMedia = media.slice(1);
 
-  function openGallery(mediaIndex: number) {
-    setGalleryStartIndex(mediaIndex);
+  function openGallery(photoIndex: number) {
+    setGalleryStartIndex(photoIndex);
     setGalleryVisible(true);
   }
 
@@ -149,7 +163,13 @@ export default function DogProfileScreen() {
         <TouchableOpacity
           activeOpacity={0.9}
           style={styles.heroContainer}
-          onPress={() => media.length > 0 && openGallery(0)}
+          onPress={() => {
+            if (heroMedia?.type === 'video') {
+              openVideoExternally(heroMedia.data.url);
+            } else if (photosOnly.length > 0) {
+              openGallery(0);
+            }
+          }}
         >
           {heroMedia?.type === 'video' ? (
             <View style={styles.heroPhoto}>
@@ -311,7 +331,7 @@ export default function DogProfileScreen() {
                   key={`video-${mediaItem.index}`}
                   activeOpacity={0.9}
                   style={styles.interspersedMediaWrapper}
-                  onPress={() => openGallery(mediaItem.index)}
+                  onPress={() => openVideoExternally(mediaItem.data.url)}
                 >
                   {mediaItem.data.thumbnail ? (
                     <Image
@@ -334,12 +354,14 @@ export default function DogProfileScreen() {
             } else {
               const url = mediaItem.data.full || mediaItem.data.large || null;
               if (!url) return null;
+              // Find the photo's position in the photos-only array for the gallery
+              const photoGalleryIdx = photosOnly.findIndex((p) => p.index === mediaItem.index);
               return (
                 <TouchableOpacity
                   key={`photo-${mediaItem.index}`}
                   activeOpacity={0.9}
                   style={styles.interspersedMediaWrapper}
-                  onPress={() => openGallery(mediaItem.index)}
+                  onPress={() => openGallery(photoGalleryIdx >= 0 ? photoGalleryIdx : 0)}
                 >
                   <Image
                     source={{ uri: url }}
@@ -401,10 +423,10 @@ export default function DogProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Full-screen media gallery */}
+      {/* Full-screen photo gallery (videos open externally, not in modal) */}
       <PhotoGalleryModal
         visible={galleryVisible}
-        media={media}
+        media={photosOnly}
         initialIndex={galleryStartIndex}
         onClose={() => setGalleryVisible(false)}
       />

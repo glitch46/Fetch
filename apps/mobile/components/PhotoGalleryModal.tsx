@@ -1,4 +1,5 @@
-// Full-screen media gallery modal — photos and YouTube videos
+// Full-screen photo gallery modal — photos only
+// Videos are opened externally via Linking (handled by the caller)
 // Swipe left/right to browse, tap to close
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
@@ -11,7 +12,6 @@ import {
   TouchableOpacity,
   FlatList,
   StatusBar,
-  Linking,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -41,9 +41,12 @@ export default function PhotoGalleryModal({
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const listRef = useRef<FlatList<GalleryMediaItem>>(null);
 
-  const effectiveMedia: GalleryMediaItem[] = media.length > 0
-    ? media
-    : (photos || []).map((p) => ({ type: 'photo' as const, data: p }));
+  // Only show photos — videos should never arrive here, but filter defensively
+  const effectiveMedia: GalleryMediaItem[] = (
+    media.length > 0
+      ? media
+      : (photos || []).map((p) => ({ type: 'photo' as const, data: p }))
+  ).filter((m) => m.type === 'photo');
 
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: Array<{ index: number | null }> }) => {
@@ -66,15 +69,7 @@ export default function PhotoGalleryModal({
 
   const renderItem = useCallback(
     ({ item }: { item: GalleryMediaItem }) => {
-      if (item.type === 'video') {
-        return (
-          <VideoSlide
-            url={item.data.url}
-            thumbnail={item.data.thumbnail || null}
-          />
-        );
-      }
-
+      if (item.type !== 'photo') return null;
       const uri = item.data.full || item.data.large || item.data.medium || item.data.small;
       return (
         <View style={styles.slide}>
@@ -107,7 +102,7 @@ export default function PhotoGalleryModal({
           <Ionicons name="close" size={28} color="#fff" />
         </TouchableOpacity>
 
-        {/* Media counter */}
+        {/* Photo counter */}
         {effectiveMedia.length > 1 && (
           <View style={styles.counter}>
             <Text style={styles.counterText}>
@@ -116,7 +111,7 @@ export default function PhotoGalleryModal({
           </View>
         )}
 
-        {/* Swipeable media list */}
+        {/* Swipeable photo list */}
         <FlatList
           ref={listRef}
           data={effectiveMedia}
@@ -139,13 +134,12 @@ export default function PhotoGalleryModal({
         {/* Dot indicators */}
         {effectiveMedia.length > 1 && (
           <View style={styles.dots}>
-            {effectiveMedia.map((item, i) => (
+            {effectiveMedia.map((_, i) => (
               <View
                 key={i}
                 style={[
                   styles.dot,
                   i === currentIndex && styles.dotActive,
-                  item.type === 'video' && styles.dotVideo,
                 ]}
               />
             ))}
@@ -153,44 +147,6 @@ export default function PhotoGalleryModal({
         )}
       </View>
     </Modal>
-  );
-}
-
-function toPlayableVideoUrl(url: string) {
-  const match = url.match(/youtube\.com\/embed\/([^?&/]+)/i);
-  if (!match) return url;
-  return `https://www.youtube.com/watch?v=${match[1]}`;
-}
-
-function VideoSlide({ url, thumbnail }: { url: string; thumbnail: string | null }) {
-  const playableUrl = toPlayableVideoUrl(url);
-
-  return (
-    <View style={styles.slide}>
-      {thumbnail ? (
-        <Image
-          source={{ uri: thumbnail }}
-          style={styles.videoPoster}
-          contentFit="contain"
-          transition={150}
-        />
-      ) : (
-        <View style={styles.videoPosterFallback} />
-      )}
-
-      <View style={styles.videoFallback}>
-        <Ionicons name="logo-youtube" size={48} color="#fff" />
-        <Text style={styles.videoFallbackText}>Open video in YouTube</Text>
-        <TouchableOpacity
-          style={styles.videoFallbackButton}
-          onPress={() => {
-            Linking.openURL(playableUrl).catch(() => undefined);
-          }}
-        >
-          <Text style={styles.videoFallbackButtonText}>Play Video</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
   );
 }
 
@@ -235,16 +191,6 @@ const styles = StyleSheet.create({
     width: SCREEN_WIDTH,
     height: SCREEN_HEIGHT * 0.75,
   },
-  videoPoster: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT * 0.75,
-    opacity: 0.7,
-  },
-  videoPosterFallback: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT * 0.75,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
   dots: {
     position: 'absolute',
     bottom: 60,
@@ -265,31 +211,5 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-  },
-  dotVideo: {
-    backgroundColor: 'rgba(26, 127, 116, 0.6)',
-  },
-  videoFallback: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 12,
-  },
-  videoFallbackText: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 15,
-    fontFamily: 'Nunito_600SemiBold',
-  },
-  videoFallbackButton: {
-    marginTop: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-  },
-  videoFallbackButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontFamily: 'Nunito_700Bold',
   },
 });
