@@ -1,7 +1,7 @@
 // Full-screen media gallery modal — photos and YouTube videos
 // Swipe left/right to browse, tap to close
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -39,6 +39,7 @@ export default function PhotoGalleryModal({
   photos,
 }: PhotoGalleryModalProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  const listRef = useRef<FlatList<GalleryMediaItem>>(null);
 
   const effectiveMedia: GalleryMediaItem[] = media.length > 0
     ? media
@@ -53,10 +54,25 @@ export default function PhotoGalleryModal({
     [],
   );
 
+  useEffect(() => {
+    if (!visible) return;
+    const safeIndex = Math.max(0, Math.min(initialIndex, effectiveMedia.length - 1));
+    setCurrentIndex(safeIndex);
+    const timer = setTimeout(() => {
+      listRef.current?.scrollToIndex({ index: safeIndex, animated: false });
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [visible, initialIndex, effectiveMedia.length]);
+
   const renderItem = useCallback(
     ({ item }: { item: GalleryMediaItem }) => {
       if (item.type === 'video') {
-        return <LazyWebView key="video" url={item.data.url} />;
+        return (
+          <VideoSlide
+            url={item.data.url}
+            thumbnail={item.data.thumbnail || null}
+          />
+        );
       }
 
       const uri = item.data.full || item.data.large || item.data.medium || item.data.small;
@@ -102,6 +118,7 @@ export default function PhotoGalleryModal({
 
         {/* Swipeable media list */}
         <FlatList
+          ref={listRef}
           data={effectiveMedia}
           renderItem={renderItem}
           keyExtractor={(_, i) => `gallery-${i}`}
@@ -116,6 +133,7 @@ export default function PhotoGalleryModal({
           })}
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={{ itemVisiblePercentThreshold: 50 }}
+          onScrollToIndexFailed={() => undefined}
         />
 
         {/* Dot indicators */}
@@ -138,72 +156,40 @@ export default function PhotoGalleryModal({
   );
 }
 
-// Lazy-loaded WebView component — only loads react-native-webview when needed
-function LazyWebView({ url }: { url: string }) {
-  const [WebViewModule, setWebViewModule] = useState<typeof import('react-native-webview').WebView | null>(null);
-  const [error, setError] = useState(false);
+function toPlayableVideoUrl(url: string) {
+  const match = url.match(/youtube\.com\/embed\/([^?&/]+)/i);
+  if (!match) return url;
+  return `https://www.youtube.com/watch?v=${match[1]}`;
+}
 
-  const playableUrl = React.useMemo(() => {
-    const match = url.match(/youtube\.com\/embed\/([^?&/]+)/i);
-    if (!match) return url;
-    const videoId = match[1];
-    // YouTube embed URLs can throw Android Error 153 in WebView.
-    // watch URLs are more reliable in in-app WebViews.
-    return `https://www.youtube.com/watch?v=${videoId}`;
-  }, [url]);
-
-  useEffect(() => {
-    let mounted = true;
-    import('react-native-webview')
-      .then((mod) => { if (mounted) setWebViewModule(() => mod.WebView); })
-      .catch(() => { if (mounted) setError(true); });
-    return () => { mounted = false; };
-  }, []);
-
-  if (error) {
-    return (
-      <View style={styles.slide}>
-        <View style={styles.videoFallback}>
-          <Ionicons name="play-circle" size={48} color="#fff" />
-          <Text style={styles.videoFallbackText}>Video unavailable</Text>
-          <TouchableOpacity
-            style={styles.videoFallbackButton}
-            onPress={() => {
-              Linking.openURL(playableUrl).catch(() => undefined);
-            }}
-          >
-            <Text style={styles.videoFallbackButtonText}>Open in YouTube</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
-
-  if (!WebViewModule) {
-    return (
-      <View style={styles.slide}>
-        <View style={styles.videoFallback}>
-          <Ionicons name="play-circle" size={48} color="#fff" />
-          <Text style={styles.videoFallbackText}>Loading video...</Text>
-        </View>
-      </View>
-    );
-  }
+function VideoSlide({ url, thumbnail }: { url: string; thumbnail: string | null }) {
+  const playableUrl = toPlayableVideoUrl(url);
 
   return (
     <View style={styles.slide}>
-      <WebViewModule
-        source={{ uri: playableUrl }}
-        style={styles.videoPlayer}
-        allowsInlineMediaPlayback
-        mediaPlaybackRequiresUserAction={false}
-        scrollEnabled={false}
-        bounces={false}
-        javaScriptEnabled
-        domStorageEnabled
-        onError={() => setError(true)}
-        onHttpError={() => setError(true)}
-      />
+      {thumbnail ? (
+        <Image
+          source={{ uri: thumbnail }}
+          style={styles.videoPoster}
+          contentFit="contain"
+          transition={150}
+        />
+      ) : (
+        <View style={styles.videoPosterFallback} />
+      )}
+
+      <View style={styles.videoFallback}>
+        <Ionicons name="logo-youtube" size={48} color="#fff" />
+        <Text style={styles.videoFallbackText}>Open video in YouTube</Text>
+        <TouchableOpacity
+          style={styles.videoFallbackButton}
+          onPress={() => {
+            Linking.openURL(playableUrl).catch(() => undefined);
+          }}
+        >
+          <Text style={styles.videoFallbackButtonText}>Play Video</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -249,9 +235,15 @@ const styles = StyleSheet.create({
     width: SCREEN_WIDTH,
     height: SCREEN_HEIGHT * 0.75,
   },
-  videoPlayer: {
+  videoPoster: {
     width: SCREEN_WIDTH,
     height: SCREEN_HEIGHT * 0.75,
+    opacity: 0.7,
+  },
+  videoPosterFallback: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT * 0.75,
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   dots: {
     position: 'absolute',
