@@ -1,19 +1,13 @@
-// DogCard component — media gallery with photo/YouTube support
-// Photos render natively, YouTube videos show a thumbnail with play overlay
+// DogCard component — photo gallery only
+// Videos are NOT shown on the swipe card (they appear in the dog profile)
 
 import { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Dimensions, Pressable, Linking } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import type { Dog, DogPhoto, DogVideo } from '@fetch/shared';
+import type { Dog, DogPhoto } from '@fetch/shared';
 import { colors } from '../constants/colors';
 import { cleanText } from '../utils/cleanText';
-
-function openVideoExternally(url: string) {
-  const match = url.match(/youtube\.com\/embed\/([^?&/]+)/i);
-  const watchUrl = match ? `https://www.youtube.com/watch?v=${match[1]}` : url;
-  Linking.openURL(watchUrl).catch(() => undefined);
-}
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH - 32;
@@ -21,53 +15,36 @@ const CARD_HEIGHT = CARD_WIDTH * 1.3;
 
 const BLURHASH = 'L6Pj0^jE.AyE_3t7t7R**0o#DgR4';
 
-type MediaItem =
-  | { type: 'photo'; data: DogPhoto }
-  | { type: 'video'; data: DogVideo };
-
 interface DogCardProps {
   dog: Dog;
   onPress?: () => void;
 }
 
 export default function DogCard({ dog, onPress }: DogCardProps) {
-  const [mediaIndex, setMediaIndex] = useState(0);
+  const [photoIndex, setPhotoIndex] = useState(0);
 
-  const media: MediaItem[] = [
-    ...(dog.photos || []).map((p) => ({ type: 'photo' as const, data: p })),
-    ...(dog.videos || []).map((v) => ({ type: 'video' as const, data: v })),
-  ];
-
-  const currentMedia = media[mediaIndex] || null;
-  const currentPhotoUrl = currentMedia?.type === 'photo'
-    ? (currentMedia.data.large || currentMedia.data.medium || currentMedia.data.small)
+  // Only photos — videos are shown in the profile, not the swipe card
+  const photos: DogPhoto[] = dog.photos || [];
+  const currentPhoto = photos[photoIndex] || null;
+  const photoUrl = currentPhoto
+    ? (currentPhoto.large || currentPhoto.medium || currentPhoto.small)
     : null;
 
   const handleTap = useCallback(
     (locationX: number) => {
-      if (media.length <= 1) {
-        // If only one item and it's a video, open YouTube; otherwise open profile
-        if (currentMedia?.type === 'video') {
-          openVideoExternally(currentMedia.data.url);
-        } else {
-          onPress?.();
-        }
+      if (photos.length <= 1) {
+        onPress?.();
         return;
       }
       if (locationX > CARD_WIDTH * 0.67) {
-        setMediaIndex((i) => (i + 1) % media.length);
+        setPhotoIndex((i) => (i + 1) % photos.length);
       } else if (locationX < CARD_WIDTH * 0.33) {
-        setMediaIndex((i) => (i - 1 + media.length) % media.length);
+        setPhotoIndex((i) => (i - 1 + photos.length) % photos.length);
       } else {
-        // Center tap: if current item is a video, open YouTube; otherwise open profile
-        if (currentMedia?.type === 'video') {
-          openVideoExternally(currentMedia.data.url);
-        } else {
-          onPress?.();
-        }
+        onPress?.();
       }
     },
-    [media.length, onPress, currentMedia]
+    [photos.length, onPress]
   );
 
   const matchLabel = dog.match_score
@@ -76,36 +53,17 @@ export default function DogCard({ dog, onPress }: DogCardProps) {
       ? 'New Arrival'
       : null;
 
+  // Show video count badge if the dog has videos
+  const videoCount = (dog.videos || []).length;
+
   return (
     <Pressable
       style={styles.card}
       onPress={(e) => handleTap(e.nativeEvent.locationX)}
     >
-      {currentMedia?.type === 'video' ? (
-        <View style={styles.photo}>
-          {currentMedia.data.thumbnail ? (
-            <Image
-              source={{ uri: currentMedia.data.thumbnail }}
-              style={styles.photo}
-              contentFit="cover"
-              contentPosition="top"
-              placeholder={{ blurhash: BLURHASH }}
-              cachePolicy="memory-disk"
-            />
-          ) : (
-            <View style={[styles.photo, styles.noPhoto]}>
-              <Text style={styles.noPhotoText}>Video</Text>
-            </View>
-          )}
-          <View style={styles.playOverlay}>
-            <View style={styles.playCircle}>
-              <Text style={styles.playArrow}>▶</Text>
-            </View>
-          </View>
-        </View>
-      ) : currentPhotoUrl ? (
+      {photoUrl ? (
         <Image
-          source={{ uri: currentPhotoUrl }}
+          source={{ uri: photoUrl }}
           style={styles.photo}
           contentFit="cover"
           contentPosition="top"
@@ -119,25 +77,27 @@ export default function DogCard({ dog, onPress }: DogCardProps) {
         </View>
       )}
 
-      {/* Video indicator badge */}
-      {currentMedia?.type === 'video' && (
-        <View style={styles.videoBadge}>
-          <Text style={styles.videoBadgeText}>▶ VIDEO</Text>
-        </View>
-      )}
-
-      {/* Media indicator segments */}
-      {media.length > 1 && (
+      {/* Photo indicator segments */}
+      {photos.length > 1 && (
         <View style={styles.progressBar}>
-          {media.map((item, i) => (
+          {photos.map((_, i) => (
             <View
               key={i}
               style={[
                 styles.progressSegment,
-                i === mediaIndex && styles.progressActive,
+                i === photoIndex && styles.progressActive,
               ]}
             />
           ))}
+        </View>
+      )}
+
+      {/* Video count badge */}
+      {videoCount > 0 && (
+        <View style={styles.videoBadge}>
+          <Text style={styles.videoBadgeText}>
+            {videoCount} {videoCount === 1 ? 'Video' : 'Videos'}
+          </Text>
         </View>
       )}
 
@@ -207,44 +167,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: 'Nunito_600SemiBold',
   },
-  playOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  playCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#fff',
-  },
-  playArrow: {
-    color: '#fff',
-    fontSize: 24,
-    marginLeft: 4,
-  },
-  videoBadge: {
-    position: 'absolute',
-    top: 10,
-    left: 12,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  videoBadgeText: {
-    color: '#fff',
-    fontSize: 11,
-    fontFamily: 'Nunito_700Bold',
-  },
   progressBar: {
     position: 'absolute',
     top: 10,
@@ -261,6 +183,20 @@ const styles = StyleSheet.create({
   },
   progressActive: {
     backgroundColor: '#fff',
+  },
+  videoBadge: {
+    position: 'absolute',
+    top: 20,
+    left: 16,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  videoBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontFamily: 'Nunito_700Bold',
   },
   matchBadge: {
     position: 'absolute',

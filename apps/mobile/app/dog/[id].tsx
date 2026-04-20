@@ -26,9 +26,7 @@ import { cleanText } from '../../utils/cleanText';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-type MediaItem =
-  | { type: 'photo'; data: DogPhoto; index: number }
-  | { type: 'video'; data: DogVideo; index: number };
+type PhotoItem = { data: DogPhoto; index: number };
 
 function formatLastVerified(dateStr: string): string {
   const date = new Date(dateStr);
@@ -74,18 +72,13 @@ export default function DogProfileScreen() {
   const [galleryStartIndex, setGalleryStartIndex] = useState(0);
   const [modalAction, setModalAction] = useState<'adopt' | 'foster' | null>(null);
 
-  // Build combined media list: all photos then videos
-  const media: MediaItem[] = [
-    ...(dog?.photos || []).map((p, i) => ({ type: 'photo' as const, data: p, index: i })),
-    ...(dog?.videos || []).map((v, i) => ({ type: 'video' as const, data: v, index: (dog?.photos || []).length + i })),
-  ];
+  // Photos for gallery display
+  const photos: PhotoItem[] = (dog?.photos || []).map((p, i) => ({ data: p, index: i }));
+  // Videos — only displayed as YouTube thumbnail cards, opened externally
+  const videos: DogVideo[] = dog?.videos || [];
 
-  // Photos-only list for the gallery modal (videos open externally)
-  const photosOnly: MediaItem[] = media.filter((m) => m.type === 'photo');
-
-  // Hero is always the first photo; videos are shown in the interspersed section
-  const heroMedia = photosOnly[0] || null;
-  const remainingMedia = media.filter((m) => m !== heroMedia);
+  const heroPhoto = photos[0] || null;
+  const remainingPhotos = photos.slice(1);
 
   function openGallery(photoIndex: number) {
     setGalleryStartIndex(photoIndex);
@@ -145,12 +138,12 @@ export default function DogProfileScreen() {
     }
   }
 
-  // Build interspersed media+prompt content for the "Get to Know Me" section
-  const interspersedItems: Array<{ type: 'media'; item: MediaItem } | { type: 'prompt'; index: number }> = [];
-  const maxItems = Math.max(remainingMedia.length, prompts.length);
+  // Build interspersed photo+prompt content for the "Get to Know Me" section
+  const interspersedItems: Array<{ type: 'photo'; item: PhotoItem } | { type: 'prompt'; index: number }> = [];
+  const maxItems = Math.max(remainingPhotos.length, prompts.length);
   for (let i = 0; i < maxItems; i++) {
-    if (i < remainingMedia.length) {
-      interspersedItems.push({ type: 'media', item: remainingMedia[i] });
+    if (i < remainingPhotos.length) {
+      interspersedItems.push({ type: 'photo', item: remainingPhotos[i] });
     }
     if (i < prompts.length) {
       interspersedItems.push({ type: 'prompt', index: i });
@@ -160,43 +153,15 @@ export default function DogProfileScreen() {
   return (
     <View style={styles.container}>
       <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false}>
-        {/* Hero Media */}
+        {/* Hero Photo */}
         <TouchableOpacity
           activeOpacity={0.9}
           style={styles.heroContainer}
-          onPress={() => {
-            if (heroMedia?.type === 'video') {
-              openVideoExternally(heroMedia.data.url);
-            } else if (photosOnly.length > 0) {
-              openGallery(0);
-            }
-          }}
+          onPress={() => photos.length > 0 && openGallery(0)}
         >
-          {heroMedia?.type === 'video' ? (
-            <View style={styles.heroPhoto}>
-              {heroMedia.data.thumbnail ? (
-                <Image
-                  source={{ uri: heroMedia.data.thumbnail }}
-                  style={styles.heroPhoto}
-                  contentFit="cover"
-                  contentPosition="top"
-                  placeholder={{ blurhash: 'L6Pj0^jE.AyE_3t7t7R**0o#DgR4' }}
-                  cachePolicy="memory-disk"
-                />
-              ) : (
-                <View style={[styles.heroPhoto, styles.noPhoto]}>
-                  <Text style={styles.noPhotoText}>Video</Text>
-                </View>
-              )}
-              <View style={styles.heroPlayOverlay}>
-                <View style={styles.playCircle}>
-                  <Text style={styles.playArrow}>▶</Text>
-                </View>
-              </View>
-            </View>
-          ) : heroMedia?.type === 'photo' ? (
+          {heroPhoto ? (
             <Image
-              source={{ uri: heroMedia.data.full || heroMedia.data.large }}
+              source={{ uri: heroPhoto.data.full || heroPhoto.data.large }}
               style={styles.heroPhoto}
               contentFit="cover"
               contentPosition="top"
@@ -208,18 +173,11 @@ export default function DogProfileScreen() {
             </View>
           )}
 
-          {/* Video indicator on hero */}
-          {heroMedia?.type === 'video' && (
-            <View style={styles.heroVideoBadge}>
-              <Text style={styles.heroVideoBadgeText}>▶ VIDEO</Text>
-            </View>
-          )}
-
-          {/* Media count indicator */}
-          {media.length > 1 && (
+          {/* Photo count indicator */}
+          {photos.length > 1 && (
             <View style={styles.photoCountBadge}>
               <Ionicons name="images-outline" size={14} color="#fff" />
-              <Text style={styles.photoCountText}>{media.length}</Text>
+              <Text style={styles.photoCountText}>{photos.length}</Text>
             </View>
           )}
 
@@ -324,56 +282,26 @@ export default function DogProfileScreen() {
         )}
 
         {interspersedItems.map((item) => {
-          if (item.type === 'media') {
-            const mediaItem = item.item;
-            if (mediaItem.type === 'video') {
-              return (
-                <TouchableOpacity
-                  key={`video-${mediaItem.index}`}
-                  activeOpacity={0.9}
-                  style={styles.interspersedMediaWrapper}
-                  onPress={() => openVideoExternally(mediaItem.data.url)}
-                >
-                  {mediaItem.data.thumbnail ? (
-                    <Image
-                      source={{ uri: mediaItem.data.thumbnail }}
-                      style={styles.interspersedMedia}
-                      contentFit="cover"
-                      contentPosition="top"
-                      transition={200}
-                    />
-                  ) : (
-                    <View style={[styles.interspersedMedia, styles.noPhoto]}>
-                      <Text style={styles.noPhotoText}>Video</Text>
-                    </View>
-                  )}
-                  <View style={styles.videoOverlayBadge}>
-                    <Ionicons name="play-circle" size={24} color="#fff" />
-                  </View>
-                </TouchableOpacity>
-              );
-            } else {
-              const url = mediaItem.data.full || mediaItem.data.large || null;
-              if (!url) return null;
-              // Find the photo's position in the photos-only array for the gallery
-              const photoGalleryIdx = photosOnly.findIndex((p) => p.index === mediaItem.index);
-              return (
-                <TouchableOpacity
-                  key={`photo-${mediaItem.index}`}
-                  activeOpacity={0.9}
-                  style={styles.interspersedMediaWrapper}
-                  onPress={() => openGallery(photoGalleryIdx >= 0 ? photoGalleryIdx : 0)}
-                >
-                  <Image
-                    source={{ uri: url }}
-                    style={styles.interspersedMedia}
-                    contentFit="cover"
-                    contentPosition="top"
-                    transition={200}
-                  />
-                </TouchableOpacity>
-              );
-            }
+          if (item.type === 'photo') {
+            const photoItem = item.item;
+            const url = photoItem.data.full || photoItem.data.large || null;
+            if (!url) return null;
+            return (
+              <TouchableOpacity
+                key={`photo-${photoItem.index}`}
+                activeOpacity={0.9}
+                style={styles.interspersedMediaWrapper}
+                onPress={() => openGallery(photoItem.index)}
+              >
+                <Image
+                  source={{ uri: url }}
+                  style={styles.interspersedMedia}
+                  contentFit="cover"
+                  contentPosition="top"
+                  transition={200}
+                />
+              </TouchableOpacity>
+            );
           } else {
             const p = prompts[item.index];
             return (
@@ -386,6 +314,39 @@ export default function DogProfileScreen() {
             );
           }
         })}
+
+        {/* Videos Section — YouTube thumbnail cards that open externally */}
+        {videos.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Videos</Text>
+            {videos.map((video, i) => (
+              <TouchableOpacity
+                key={`yt-${i}`}
+                activeOpacity={0.8}
+                style={styles.youtubeCard}
+                onPress={() => openVideoExternally(video.url)}
+              >
+                {video.thumbnail ? (
+                  <Image
+                    source={{ uri: video.thumbnail }}
+                    style={styles.youtubeThumbnail}
+                    contentFit="cover"
+                    transition={150}
+                  />
+                ) : (
+                  <View style={[styles.youtubeThumbnail, styles.noPhoto]} />
+                )}
+                <View style={styles.youtubePlayOverlay}>
+                  <Ionicons name="logo-youtube" size={48} color="#FF0000" />
+                </View>
+                <View style={styles.youtubeLabel}>
+                  <Ionicons name="play" size={16} color="#fff" />
+                  <Text style={styles.youtubeLabelText}>Watch on YouTube</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
         {/* Find Me On Section */}
         {dog.adoption_url && (
@@ -424,10 +385,11 @@ export default function DogProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Full-screen photo gallery (videos open externally, not in modal) */}
+      {/* Full-screen photo gallery (photos only, videos open via YouTube) */}
       <PhotoGalleryModal
         visible={galleryVisible}
-        media={photosOnly}
+        photos={photos.map((p) => p.data)}
+        media={[]}
         initialIndex={galleryStartIndex}
         onClose={() => setGalleryVisible(false)}
       />
@@ -535,44 +497,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: 'Nunito_600SemiBold',
   },
-  heroVideoBadge: {
-    position: 'absolute',
-    top: 60,
-    left: 16,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  heroVideoBadgeText: {
-    color: '#fff',
-    fontSize: 13,
-    fontFamily: 'Nunito_700Bold',
-  },
-  heroPlayOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  playCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#fff',
-  },
-  playArrow: {
-    color: '#fff',
-    fontSize: 24,
-    marginLeft: 4,
-  },
   photoCountBadge: {
     position: 'absolute',
     bottom: 12,
@@ -667,17 +591,38 @@ const styles = StyleSheet.create({
     height: INTERSPERSED_MEDIA_HEIGHT,
     borderRadius: 16,
   },
-  videoOverlayBadge: {
-    position: 'absolute',
-    bottom: 20,
-    right: 28,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+  youtubeCard: {
     borderRadius: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    overflow: 'hidden',
+    marginBottom: 12,
+    backgroundColor: '#000',
+    position: 'relative',
+  },
+  youtubeThumbnail: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+  },
+  youtubePlayOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  youtubeLabel: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    backgroundColor: '#1a1a1a',
+  },
+  youtubeLabelText: {
+    color: '#fff',
+    fontSize: 14,
+    fontFamily: 'Nunito_700Bold',
   },
   promptSection: {
     paddingHorizontal: 20,
