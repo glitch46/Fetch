@@ -106,7 +106,7 @@ function buildPhotos(pictureUrl: string | null, galleryImages: AustinPawsGallery
 /**
  * Build a RawDogVideo array from gallery_images items with type_key "YOUTUBE".
  * The API returns video IDs (not full URLs) as the `src` field, so we construct
- * embed URLs from them. Each video gets the first IMAGE item as its thumbnail.
+ * embed URLs from them. Thumbnails use the YouTube thumbnail API.
  */
 function buildVideos(galleryImages: AustinPawsGalleryItem[] | null): RawDogVideo[] {
   if (!galleryImages || galleryImages.length === 0) return [];
@@ -114,12 +114,9 @@ function buildVideos(galleryImages: AustinPawsGalleryItem[] | null): RawDogVideo
   const videoItems = galleryImages.filter((item) => item.type_key === 'YOUTUBE');
   if (videoItems.length === 0) return [];
 
-  const firstImage = galleryImages.find((item) => item.type_key === 'IMAGE');
-  const thumbnail = firstImage ? firstImage.src : null;
-
   return videoItems.map((item) => ({
     url: `https://www.youtube.com/embed/${item.src}`,
-    thumbnail,
+    thumbnail: `https://img.youtube.com/vi/${item.src}/hqdefault.jpg`,
     host: 'youtube' as const,
   }));
 }
