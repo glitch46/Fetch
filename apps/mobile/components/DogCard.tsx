@@ -2,12 +2,18 @@
 // Photos render natively, YouTube videos show a thumbnail with play overlay
 
 import { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Dimensions, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, Pressable, Linking } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { Dog, DogPhoto, DogVideo } from '@fetch/shared';
 import { colors } from '../constants/colors';
 import { cleanText } from '../utils/cleanText';
+
+function openVideoExternally(url: string) {
+  const match = url.match(/youtube\.com\/embed\/([^?&/]+)/i);
+  const watchUrl = match ? `https://www.youtube.com/watch?v=${match[1]}` : url;
+  Linking.openURL(watchUrl).catch(() => undefined);
+}
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH - 32;
@@ -40,7 +46,12 @@ export default function DogCard({ dog, onPress }: DogCardProps) {
   const handleTap = useCallback(
     (locationX: number) => {
       if (media.length <= 1) {
-        onPress?.();
+        // If only one item and it's a video, open YouTube; otherwise open profile
+        if (currentMedia?.type === 'video') {
+          openVideoExternally(currentMedia.data.url);
+        } else {
+          onPress?.();
+        }
         return;
       }
       if (locationX > CARD_WIDTH * 0.67) {
@@ -48,10 +59,15 @@ export default function DogCard({ dog, onPress }: DogCardProps) {
       } else if (locationX < CARD_WIDTH * 0.33) {
         setMediaIndex((i) => (i - 1 + media.length) % media.length);
       } else {
-        onPress?.();
+        // Center tap: if current item is a video, open YouTube; otherwise open profile
+        if (currentMedia?.type === 'video') {
+          openVideoExternally(currentMedia.data.url);
+        } else {
+          onPress?.();
+        }
       }
     },
-    [media.length, onPress]
+    [media.length, onPress, currentMedia]
   );
 
   const matchLabel = dog.match_score

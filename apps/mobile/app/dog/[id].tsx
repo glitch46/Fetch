@@ -83,8 +83,9 @@ export default function DogProfileScreen() {
   // Photos-only list for the gallery modal (videos open externally)
   const photosOnly: MediaItem[] = media.filter((m) => m.type === 'photo');
 
-  const heroMedia = media[0] || null;
-  const remainingMedia = media.slice(1);
+  // Hero is always the first photo; videos are shown in the interspersed section
+  const heroMedia = photosOnly[0] || null;
+  const remainingMedia = media.filter((m) => m !== heroMedia);
 
   function openGallery(photoIndex: number) {
     setGalleryStartIndex(photoIndex);
