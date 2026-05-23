@@ -33,6 +33,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F5A623"
       },
+      "versionCode": 1,
       "package": "com.fetch.app",
       "intentFilters": [
         {

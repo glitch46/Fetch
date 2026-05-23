@@ -75,8 +75,6 @@ async function refreshSessionWithTimeout(timeoutMs = 7000) {
  * Called when the app receives a deep link like fetch://auth/callback#access_token=...
  */
 async function handleOAuthCallback(url: string) {
-  console.log('[DEEPLINK] Processing callback URL:', url.substring(0, 80) + '...');
-
   if (!url.startsWith('fetch://auth/callback')) {
     return;
   }
@@ -102,7 +100,6 @@ async function handleOAuthCallback(url: string) {
     }
 
     if (data.session) {
-      console.log('[DEEPLINK] Session set successfully for:', data.session.user.email);
       const store = useAuthStore.getState();
       store.setSession(data.session);
       store.setEmailVerified(true);

@@ -1,0 +1,25 @@
+# Dependencies
+.gradle/
+build/
+app/build/
+
+# IDE
+.idea/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Generated
+app/src/main/gen/
+*.apk
+*.aab
+
+# Large data
+*.sqlite
+*.db
+
+# Local config
+local.properties
+keystore/

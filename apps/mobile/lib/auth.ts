@@ -75,18 +75,14 @@ async function openOAuthAndPoll(provider: 'google' | 'facebook'): Promise<Sessio
   if (error) throw error;
   if (!data.url) throw new Error('No OAuth URL returned');
 
-  console.log(`[AUTH] ${provider} OAuth URL:`, data.url);
-
   await WebBrowser.openBrowserAsync(data.url);
   WebBrowser.dismissBrowser();
 
   // The deep link handler in _layout.tsx should have already set the session.
   // Poll as a fallback in case of timing issues.
-  console.log('[AUTH] Browser closed, polling for session...');
   const session = await waitForSession(15000);
 
   if (session) {
-    console.log('[AUTH] Session found after OAuth');
     const store = useAuthStore.getState();
     store.setSession(session);
     store.setEmailVerified(true);
@@ -96,7 +92,6 @@ async function openOAuthAndPoll(provider: 'google' | 'facebook'): Promise<Sessio
   // Try one more immediate check
   const { data: existing } = await supabase.auth.getSession();
   if (existing.session) {
-    console.log('[AUTH] Found existing session');
     const store = useAuthStore.getState();
     store.setSession(existing.session);
     store.setEmailVerified(true);
