@@ -24,11 +24,6 @@
             "CFBundleURLSchemes": [
               "fetch"
             ]
-          },
-          {
-            "CFBundleURLSchemes": [
-              "fetch"
-            ]
           }
         ]
       }
@@ -41,21 +36,6 @@
       "versionCode": 1,
       "package": "com.fetch.app",
       "intentFilters": [
-        {
-          "action": "VIEW",
-          "autoVerify": true,
-          "data": [
-            {
-              "scheme": "fetch",
-              "host": "auth",
-              "pathPrefix": "/callback"
-            }
-          ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
-        },
         {
           "action": "VIEW",
           "autoVerify": true,
