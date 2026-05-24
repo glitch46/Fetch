@@ -24,6 +24,11 @@
             "CFBundleURLSchemes": [
               "fetch"
             ]
+          },
+          {
+            "CFBundleURLSchemes": [
+              "fetch"
+            ]
           }
         ]
       }
@@ -36,6 +41,21 @@
       "versionCode": 1,
       "package": "com.fetch.app",
       "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "fetch",
+              "host": "auth",
+              "pathPrefix": "/callback"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
         {
           "action": "VIEW",
           "autoVerify": true,
@@ -63,6 +83,12 @@
       "eas": {
         "projectId": "182b9f7a-700b-4b26-bf56-dfdd1a9ab86e"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/182b9f7a-700b-4b26-bf56-dfdd1a9ab86e"
     }
   }
 }
