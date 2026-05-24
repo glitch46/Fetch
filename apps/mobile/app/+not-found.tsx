@@ -1,4 +1,5 @@
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { colors } from '../constants/colors';
 
@@ -7,7 +8,7 @@ export default function NotFoundScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.logo}>Fetch</Text>
+      <Image source={require('../assets/LogoTop.webp')} style={styles.logo} contentFit="contain" />
       <View style={styles.card}>
         <Text style={styles.title}>That page was not found</Text>
         <Text style={styles.subtitle}>Returning you to the app usually fixes this after OAuth redirects.</Text>
@@ -31,9 +32,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   logo: {
-    fontSize: 40,
-    fontFamily: 'Nunito_800ExtraBold',
-    color: colors.primary,
+    width: 160,
+    height: 64,
     marginBottom: 20,
   },
   card: {

@@ -14,6 +14,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { signInWithEmail, signInWithGoogle, signInWithFacebook } from '../../lib/auth';
@@ -94,7 +95,7 @@ export default function LoginScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.logo}>Fetch</Text>
+          <Image source={require('../../assets/LogoTop.webp')} style={styles.logo} contentFit="contain" />
           <Text style={styles.tagline}>Find your pawfect match!</Text>
         </View>
 
@@ -229,10 +230,8 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   logo: {
-    fontSize: 48,
-    fontWeight: '800',
-    color: colors.primary,
-    letterSpacing: -1,
+    width: 180,
+    height: 80,
   },
   tagline: {
     fontSize: 16,

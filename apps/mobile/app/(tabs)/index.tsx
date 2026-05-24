@@ -248,7 +248,7 @@ export default function SwipeDeckScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.logo}>Fetch</Text>
+        <Image source={require('../../assets/LogoTop.webp')} style={styles.logo} contentFit="contain" />
       </View>
 
       {/* Card Stack */}
@@ -338,10 +338,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logo: {
-    fontSize: 28,
-    fontFamily: 'Nunito_800ExtraBold',
-    color: colors.primary,
-    letterSpacing: -0.5,
+    width: 120,
+    height: 48,
   },
   cardContainer: {
     flex: 1,
