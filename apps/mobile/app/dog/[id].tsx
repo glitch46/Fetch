@@ -15,6 +15,7 @@ import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDogsStore } from '../../store/useDogsStore';
 import { generateDogPrompts } from '../../services/promptGeneration';
 import PhotoGalleryModal from '../../components/PhotoGalleryModal';
@@ -66,6 +67,7 @@ export default function DogProfileScreen() {
   const scrollRef = useRef<ScrollView>(null);
 
   const dog = dogs.find((d) => d.id === id) || likedDogs.find((d) => d.id === id);
+  const insets = useSafeAreaInsets();
   const [prompts, setPrompts] = useState<DogPrompt[]>([]);
   const [promptsLoading, setPromptsLoading] = useState(false);
   const [galleryVisible, setGalleryVisible] = useState(false);
@@ -366,11 +368,11 @@ export default function DogProfileScreen() {
         )}
 
         {/* Bottom spacing for sticky bar */}
-        <View style={{ height: 100 }} />
+        <View style={{ height: 100 + insets.bottom }} />
       </ScrollView>
 
       {/* Sticky Bottom Bar */}
-      <View style={styles.bottomBar}>
+      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <TouchableOpacity
           style={[styles.ctaButton, styles.adoptCta]}
           onPress={() => setModalAction('adopt')}
@@ -693,7 +695,6 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 20,
     paddingTop: 12,
-    paddingBottom: 36,
     backgroundColor: colors.white,
     borderTopWidth: 1,
     borderTopColor: colors.border,

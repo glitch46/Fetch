@@ -12,6 +12,7 @@ interface AuthState {
   isLoading: boolean;
   emailVerified: boolean;
   hasCompletedOnboarding: boolean;
+  isAuthenticating: boolean;
 
   // Derived getters (computed via selectors)
   // Use: const isAuthenticated = useAuthStore(s => s.session !== null);
@@ -22,6 +23,7 @@ interface AuthState {
   setLoading: (loading: boolean) => void;
   setEmailVerified: (verified: boolean) => void;
   setHasCompletedOnboarding: (completed: boolean) => void;
+  setIsAuthenticating: (authenticating: boolean) => void;
   reset: () => void;
 }
 
@@ -31,6 +33,7 @@ const initialState = {
   isLoading: true,
   emailVerified: false,
   hasCompletedOnboarding: false,
+  isAuthenticating: false,
 };
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -41,5 +44,6 @@ export const useAuthStore = create<AuthState>((set) => ({
   setLoading: (isLoading) => set({ isLoading }),
   setEmailVerified: (emailVerified) => set({ emailVerified }),
   setHasCompletedOnboarding: (hasCompletedOnboarding) => set({ hasCompletedOnboarding }),
+  setIsAuthenticating: (isAuthenticating) => set({ isAuthenticating }),
   reset: () => set({ ...initialState, isLoading: false }),
 }));

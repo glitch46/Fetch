@@ -19,7 +19,7 @@ interface AuthGuardProps {
  * - If authenticated and verified: allow access to protected routes
  */
 export default function AuthGuard({ children }: AuthGuardProps) {
-  const { session, isLoading, emailVerified, hasCompletedOnboarding } = useAuthStore();
+  const { session, isLoading, emailVerified, hasCompletedOnboarding, isAuthenticating, setIsAuthenticating } = useAuthStore();
   const segments = useSegments();
   const params = useGlobalSearchParams<{ edit?: string }>();
   const router = useRouter();
@@ -36,28 +36,29 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     const isAuthenticated = session !== null;
 
     if (!isAuthenticated && !inAuthGroup) {
-      // User is not signed in and trying to access protected route
       router.replace('/(auth)/login');
     } else if (isAuthenticated && !emailVerified && (segments as string[])[1] !== 'verify-email') {
-      // User is signed in but email is not verified
       const isOnVerifyScreen = inAuthGroup && (segments as string[])[1] === 'verify-email';
       if (!isOnVerifyScreen) {
+        if (isAuthenticating) setIsAuthenticating(false);
         router.replace('/(auth)/verify-email');
       }
     } else if (isAuthenticated && emailVerified && onRootIndex) {
-      // Authenticated user on root index — go to tabs (AuthGuard will re-check from there)
+      if (isAuthenticating) setIsAuthenticating(false);
       router.replace('/(tabs)');
     } else if (isAuthenticated && emailVerified && inAuthGroup) {
-      // User is signed in, verified, and on an auth screen — redirect away
+      if (isAuthenticating) setIsAuthenticating(false);
       router.replace(hasCompletedOnboarding ? '/(tabs)' : '/preferences');
     } else if (isAuthenticated && emailVerified && hasCompletedOnboarding && onPreferences && !isEditingPreferences) {
-      // Onboarding already done — redirect from preferences to tabs
+      if (isAuthenticating) setIsAuthenticating(false);
       router.replace('/(tabs)');
     } else if (isAuthenticated && emailVerified && !hasCompletedOnboarding && inTabs) {
-      // User is on tabs but hasn't completed onboarding — show preferences
+      if (isAuthenticating) setIsAuthenticating(false);
       router.replace('/preferences');
+    } else if (isAuthenticated && inTabs) {
+      if (isAuthenticating) setIsAuthenticating(false);
     }
-  }, [session, isLoading, emailVerified, hasCompletedOnboarding, segments, params.edit]);
+  }, [session, isLoading, emailVerified, hasCompletedOnboarding, segments, params.edit, isAuthenticating, setIsAuthenticating]);
 
   if (isLoading) {
     return (

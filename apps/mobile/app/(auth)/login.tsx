@@ -17,6 +17,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { signInWithEmail, signInWithGoogle, signInWithFacebook } from '../../lib/auth';
+import { useAuthStore } from '../../store/useAuthStore';
 import { colors } from '../../constants/colors';
 
 export default function LoginScreen() {
@@ -27,6 +28,7 @@ export default function LoginScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isFacebookLoading, setIsFacebookLoading] = useState(false);
+  const isAuthenticating = useAuthStore((s) => s.isAuthenticating);
 
   const isAnyLoading = isLoading || isGoogleLoading || isFacebookLoading;
 
@@ -38,9 +40,10 @@ export default function LoginScreen() {
 
     setIsLoading(true);
     try {
+      useAuthStore.getState().setIsAuthenticating(true);
       await signInWithEmail(email.trim(), password);
-      // AuthGuard will handle navigation based on email verification status
     } catch (err: unknown) {
+      useAuthStore.getState().setIsAuthenticating(false);
       const message = err instanceof Error ? err.message : 'Login failed. Please try again.';
       Alert.alert('Login failed', message);
     } finally {
@@ -49,11 +52,12 @@ export default function LoginScreen() {
   }
 
   async function handleGoogleLogin() {
+    useAuthStore.getState().setIsAuthenticating(true);
     setIsGoogleLoading(true);
     try {
       await signInWithGoogle();
-      // AuthGuard will handle navigation
     } catch (err: unknown) {
+      useAuthStore.getState().setIsAuthenticating(false);
       const message = err instanceof Error ? err.message : 'Google login failed.';
       if (!message.includes('cancelled')) {
         Alert.alert('Login failed', message);
@@ -64,11 +68,12 @@ export default function LoginScreen() {
   }
 
   async function handleFacebookLogin() {
+    useAuthStore.getState().setIsAuthenticating(true);
     setIsFacebookLoading(true);
     try {
       await signInWithFacebook();
-      // AuthGuard will handle navigation
     } catch (err: unknown) {
+      useAuthStore.getState().setIsAuthenticating(false);
       const message = err instanceof Error ? err.message : 'Facebook login failed.';
       if (!message.includes('cancelled')) {
         Alert.alert('Login failed', message);
@@ -197,6 +202,13 @@ export default function LoginScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {isAuthenticating && (
+        <View style={styles.authenticatingOverlay}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.authenticatingText}>Signing you in...</Text>
+        </View>
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -317,5 +329,17 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: 14,
     fontWeight: '600',
+  },
+  authenticatingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(250, 250, 248, 0.92)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+  },
+  authenticatingText: {
+    fontSize: 16,
+    fontFamily: 'Nunito_600SemiBold',
+    color: colors.text,
   },
 });
