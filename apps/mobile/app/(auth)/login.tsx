@@ -227,11 +227,11 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 32,
   },
   logo: {
-    width: 180,
-    height: 80,
+    width: 260,
+    height: 110,
   },
   tagline: {
     fontSize: 16,

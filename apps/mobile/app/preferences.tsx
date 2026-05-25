@@ -11,6 +11,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePreferencesStore } from '../store/usePreferencesStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { PREFERENCE_OPTIONS } from '../constants/preferences';
@@ -49,6 +50,7 @@ export default function PreferencesScreen() {
   const params = useLocalSearchParams<{ edit?: string }>();
   const isEditMode = params.edit === 'true';
   const { preferences, togglePreference } = usePreferencesStore();
+  const insets = useSafeAreaInsets();
 
   function handleSave() {
     useAuthStore.getState().setHasCompletedOnboarding(true);
@@ -94,7 +96,7 @@ export default function PreferencesScreen() {
         </View>
       </ScrollView>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <TouchableOpacity style={styles.continueButton} onPress={handleSave}>
           <Text style={styles.continueText}>
             Continue{preferences.length > 0 ? ` (${preferences.length})` : ''}
@@ -166,7 +168,6 @@ const styles = StyleSheet.create({
   footer: {
     paddingHorizontal: 20,
     paddingTop: 12,
-    paddingBottom: 36,
     backgroundColor: colors.background,
     borderTopWidth: 1,
     borderTopColor: colors.border,

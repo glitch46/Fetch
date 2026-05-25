@@ -22,6 +22,7 @@ import Animated, {
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDogsStore } from '../../store/useDogsStore';
 import DogCard from '../../components/DogCard';
 import MatchCelebration from '../../components/MatchCelebration';
@@ -48,6 +49,7 @@ export default function SwipeDeckScreen() {
 
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
+  const insets = useSafeAreaInsets();
 
   const fetchDogs = useCallback(async () => {
     setLoading(true);
@@ -295,7 +297,7 @@ export default function SwipeDeckScreen() {
       </View>
 
       {/* Action Buttons */}
-      <View style={styles.actions}>
+      <View style={[styles.actions, { paddingBottom: Math.max(insets.bottom, 24) }]}>
         <TouchableOpacity
           style={[styles.actionButton, styles.passButton]}
           onPress={() => animateSwipe('left')}
@@ -338,8 +340,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logo: {
-    width: 120,
-    height: 48,
+    width: 160,
+    height: 64,
   },
   cardContainer: {
     flex: 1,
@@ -391,7 +393,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 40,
-    paddingBottom: 24,
     paddingTop: 12,
   },
   actionButton: {

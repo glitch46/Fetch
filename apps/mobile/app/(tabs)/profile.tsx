@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { signOut } from '../../lib/auth';
 import { useAuthStore } from '../../store/useAuthStore';
 import { colors } from '../../constants/colors';
@@ -10,6 +11,7 @@ import Constants from 'expo-constants';
 export default function ProfileScreen() {
   const router = useRouter();
   const { session, user } = useAuthStore();
+  const insets = useSafeAreaInsets();
 
   const displayName = user?.display_name || session?.user?.user_metadata?.display_name || null;
   const email = user?.email || session?.user?.email || '';
@@ -61,7 +63,7 @@ export default function ProfileScreen() {
       </View>
 
       {/* Footer */}
-      <Text style={styles.version}>
+      <Text style={[styles.version, { paddingBottom: Math.max(16, insets.bottom) }]}>
         Fetch v{Constants.expoConfig?.version || '1.0.0'}
       </Text>
     </View>
@@ -143,6 +145,5 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito_400Regular',
     color: colors.textSecondary,
     marginTop: 'auto',
-    paddingBottom: 32,
   },
 });

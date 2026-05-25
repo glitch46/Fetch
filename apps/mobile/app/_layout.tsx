@@ -4,6 +4,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { Stack } from 'expo-router';
+import { Image } from 'expo-image';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useAuthStore } from '../store/useAuthStore';
 import { onAuthStateChange, getSession, extractParamsFromUrl } from '../lib/auth';
 import AuthGuard from '../components/AuthGuard';
@@ -120,6 +122,7 @@ async function handleOAuthCallback(url: string) {
 export default function RootLayout() {
   const { setSession, setUser, setLoading, setEmailVerified, setHasCompletedOnboarding, reset } = useAuthStore();
   const [error, setError] = useState<string | null>(null);
+  const [showCustomSplash, setShowCustomSplash] = useState(true);
   const processedUrlRef = useRef<string | null>(null);
 
   const [fontsLoaded, fontError] = useFonts({
@@ -129,11 +132,17 @@ export default function RootLayout() {
     Nunito_800ExtraBold,
   });
 
+  const appReady = fontsLoaded || fontError;
+
   useEffect(() => {
-    if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync();
+    if (appReady) {
+      const fadeTimer = setTimeout(() => {
+        SplashScreen.hideAsync();
+        setTimeout(() => setShowCustomSplash(false), 1200);
+      }, 800);
+      return () => clearTimeout(fadeTimer);
     }
-  }, [fontsLoaded, fontError]);
+  }, [appReady]);
 
   // Handle deep links for OAuth callbacks
   useEffect(() => {
@@ -231,11 +240,29 @@ export default function RootLayout() {
     );
   }
 
-  if (!fontsLoaded && !fontError) {
+  if (showCustomSplash) {
     return (
-      <View style={styles.loading}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <View style={styles.splashContainer}>
+        {appReady && (
+          <Animated.View
+            entering={FadeIn.duration(600)}
+            exiting={FadeOut.duration(500)}
+            style={styles.splashContent}
+          >
+            <Image
+              source={require('../assets/LogoTop.webp')}
+              style={styles.splashLogo}
+              contentFit="contain"
+            />
+          </Animated.View>
+        )}
       </View>
+    );
+  }
+
+  if (!appReady) {
+    return (
+      <View style={styles.splashContainer} />
     );
   }
 
@@ -256,11 +283,18 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
-  loading: {
+  splashContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: colors.background,
+  },
+  splashContent: {
+    alignItems: 'center',
+  },
+  splashLogo: {
+    width: 280,
+    height: 120,
   },
   errorContainer: {
     flex: 1,

@@ -4,13 +4,13 @@
     "slug": "fetch",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/IconB.png",
+    "icon": "./assets/IconB2.webp",
     "scheme": "fetch",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/splash.png",
+      "image": "./assets/LogoTop.webp",
       "resizeMode": "contain",
-      "backgroundColor": "#F5A623"
+      "backgroundColor": "#FAFAF8"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -30,8 +30,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/IconB.png",
-        "backgroundColor": "#F5A623"
+        "foregroundImage": "./assets/IconB2.webp",
+        "backgroundColor": "#FAFAF8"
       },
       "versionCode": 1,
       "package": "com.fetch.app",
