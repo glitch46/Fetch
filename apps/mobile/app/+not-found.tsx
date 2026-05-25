@@ -8,7 +8,7 @@ export default function NotFoundScreen() {
 
   return (
     <View style={styles.container}>
-      <Image source={require('../assets/NewLogo.png')} style={styles.logo} contentFit="contain" />
+      <Image source={require('../assets/NewLogo2.png')} style={styles.logo} contentFit="contain" />
       <View style={styles.card}>
         <Text style={styles.title}>That page was not found</Text>
         <Text style={styles.subtitle}>Returning you to the app usually fixes this after OAuth redirects.</Text>

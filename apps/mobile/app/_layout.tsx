@@ -253,7 +253,7 @@ export default function RootLayout() {
         {appReady && (
           <Animated.View style={[styles.splashContent, splashAnimatedStyle]}>
             <Image
-              source={require('../assets/NewLogo.png')}
+              source={require('../assets/NewLogo2.png')}
               style={styles.splashLogo}
               contentFit="contain"
             />

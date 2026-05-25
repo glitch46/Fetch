@@ -250,7 +250,7 @@ export default function SwipeDeckScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Image source={require('../../assets/NewLogo.png')} style={styles.logo} contentFit="contain" />
+        <Image source={require('../../assets/NewLogo2.png')} style={styles.logo} contentFit="contain" />
       </View>
 
       {/* Card Stack */}
