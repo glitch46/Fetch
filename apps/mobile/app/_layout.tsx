@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { Stack } from 'expo-router';
 import { Image } from 'expo-image';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import Animated, { FadeIn, useSharedValue, useAnimatedStyle, withTiming, runOnJS } from 'react-native-reanimated';
 import { useAuthStore } from '../store/useAuthStore';
 import { onAuthStateChange, getSession, extractParamsFromUrl } from '../lib/auth';
 import AuthGuard from '../components/AuthGuard';
@@ -124,6 +124,10 @@ export default function RootLayout() {
   const [error, setError] = useState<string | null>(null);
   const [showCustomSplash, setShowCustomSplash] = useState(true);
   const processedUrlRef = useRef<string | null>(null);
+  const splashOpacity = useSharedValue(0);
+  const splashAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: splashOpacity.value,
+  }));
 
   const [fontsLoaded, fontError] = useFonts({
     Nunito_400Regular,
@@ -136,11 +140,14 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (appReady) {
-      const fadeTimer = setTimeout(() => {
+      splashOpacity.value = withTiming(1, { duration: 500 });
+      const holdTimer = setTimeout(() => {
         SplashScreen.hideAsync();
-        setTimeout(() => setShowCustomSplash(false), 1200);
-      }, 800);
-      return () => clearTimeout(fadeTimer);
+        splashOpacity.value = withTiming(0, { duration: 600 }, (finished) => {
+          if (finished) runOnJS(setShowCustomSplash)(false);
+        });
+      }, 600);
+      return () => clearTimeout(holdTimer);
     }
   }, [appReady]);
 
@@ -244,13 +251,9 @@ export default function RootLayout() {
     return (
       <View style={styles.splashContainer}>
         {appReady && (
-          <Animated.View
-            entering={FadeIn.duration(600)}
-            exiting={FadeOut.duration(500)}
-            style={styles.splashContent}
-          >
+          <Animated.View style={[styles.splashContent, splashAnimatedStyle]}>
             <Image
-              source={require('../assets/LogoTop.webp')}
+              source={require('../assets/NewLogo.PNG')}
               style={styles.splashLogo}
               contentFit="contain"
             />

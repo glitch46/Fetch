@@ -14,7 +14,6 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { signUpWithEmail, signInWithGoogle, signInWithFacebook } from '../../lib/auth';
@@ -103,7 +102,7 @@ export default function RegisterScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Image source={require('../../assets/LogoTop.webp')} style={styles.logo} contentFit="contain" />
+          <Text style={styles.logo}>Fetch</Text>
           <Text style={styles.tagline}>Create your account</Text>
         </View>
 
@@ -261,8 +260,10 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   logo: {
-    width: 180,
-    height: 80,
+    fontSize: 52,
+    fontWeight: '800',
+    color: colors.primary,
+    letterSpacing: -1,
   },
   tagline: {
     fontSize: 16,
