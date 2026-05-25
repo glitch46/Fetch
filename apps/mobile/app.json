@@ -8,7 +8,7 @@
     "scheme": "fetch",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/NewLogo.PNG",
+      "image": "./assets/NewLogo.png",
       "resizeMode": "contain",
       "backgroundColor": "#FAFAF8"
     },
