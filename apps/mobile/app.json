@@ -4,11 +4,11 @@
     "slug": "fetch",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/IconB2.webp",
+    "icon": "./assets/IconB2.png",
     "scheme": "fetch",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/LogoTop.webp",
+      "image": "./assets/LogoTopSplash.png",
       "resizeMode": "contain",
       "backgroundColor": "#FAFAF8"
     },
@@ -30,7 +30,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/IconB2.webp",
+        "foregroundImage": "./assets/IconB2.png",
         "backgroundColor": "#FAFAF8"
       },
       "versionCode": 1,
