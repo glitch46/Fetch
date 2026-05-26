@@ -1,13 +1,14 @@
 // Swipe Deck screen — owned by Mobile Agent (implementation)
 // Primary screen: card stack with reanimated gestures for browsing adoptable dogs
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Dimensions,
   TouchableOpacity,
+  Pressable,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -15,6 +16,8 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
+  withRepeat,
+  cancelAnimation,
   runOnJS,
   interpolate,
   Extrapolation,
@@ -23,6 +26,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useDogsStore } from '../../store/useDogsStore';
 import DogCard from '../../components/DogCard';
 import MatchCelebration from '../../components/MatchCelebration';
@@ -32,6 +36,9 @@ import type { Dog } from '@fetch/shared';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
+const TUTORIAL_STORAGE_KEY = 'fetch.swipeTutorial.seen';
+const TUTORIAL_IDLE_DELAY_MS = 5000;
+const TUTORIAL_DISTANCE = SCREEN_WIDTH * 0.34;
 
 export default function SwipeDeckScreen() {
   const router = useRouter();
@@ -50,6 +57,132 @@ export default function SwipeDeckScreen() {
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const insets = useSafeAreaInsets();
+  const [tutorialActive, setTutorialActive] = useState(false);
+  const [tutorialLabel, setTutorialLabel] = useState('');
+  const [showTutorialTap, setShowTutorialTap] = useState(false);
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tutorialTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const abortTapCountRef = useRef(0);
+  const tutorialActiveRef = useRef(false);
+  const tutorialOverlayOpacity = useSharedValue(0);
+  const tutorialTextOpacity = useSharedValue(0);
+  const tutorialTapOpacity = useSharedValue(0);
+  const tutorialTapScale = useSharedValue(1);
+
+  const canShowTutorial = dogs.length > 0 && currentIndex < dogs.length && !isLoading;
+
+  const tutorialOverlayStyle = useAnimatedStyle(() => ({
+    opacity: tutorialOverlayOpacity.value,
+  }));
+
+  const tutorialTextStyle = useAnimatedStyle(() => ({
+    opacity: tutorialTextOpacity.value,
+  }));
+
+  const tutorialTapStyle = useAnimatedStyle(() => ({
+    opacity: tutorialTapOpacity.value,
+    transform: [{ scale: tutorialTapScale.value }],
+  }));
+
+  const clearIdleTimer = useCallback(() => {
+    if (idleTimerRef.current) {
+      clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = null;
+    }
+  }, []);
+
+  const clearTutorialTimers = useCallback(() => {
+    tutorialTimersRef.current.forEach((timer) => clearTimeout(timer));
+    tutorialTimersRef.current = [];
+  }, []);
+
+  const endTutorial = useCallback(() => {
+    clearTutorialTimers();
+    cancelAnimation(tutorialTapScale);
+    tutorialTextOpacity.value = withTiming(0, { duration: 220 });
+    tutorialTapOpacity.value = withTiming(0, { duration: 180 });
+    tutorialTapScale.value = withTiming(1, { duration: 180 });
+    translateX.value = withTiming(0, { duration: 320 });
+    translateY.value = withTiming(0, { duration: 320 });
+    tutorialOverlayOpacity.value = withTiming(0, { duration: 320 });
+
+    const timer = setTimeout(() => {
+      tutorialActiveRef.current = false;
+      abortTapCountRef.current = 0;
+      setShowTutorialTap(false);
+      setTutorialLabel('');
+      setTutorialActive(false);
+    }, 340);
+    tutorialTimersRef.current.push(timer);
+  }, [clearTutorialTimers, tutorialOverlayOpacity, tutorialTapOpacity, tutorialTapScale, tutorialTextOpacity, translateX, translateY]);
+
+  const startTutorial = useCallback(() => {
+    if (!canShowTutorial || tutorialActiveRef.current) return;
+
+    AsyncStorage.setItem(TUTORIAL_STORAGE_KEY, 'true').catch(() => undefined);
+    clearIdleTimer();
+    clearTutorialTimers();
+    tutorialActiveRef.current = true;
+    abortTapCountRef.current = 0;
+    setTutorialActive(true);
+    setShowTutorialTap(false);
+    translateY.value = 0;
+    tutorialOverlayOpacity.value = withTiming(0.58, { duration: 320 });
+
+    setTutorialLabel('Swipe Left to Pass');
+    tutorialTextOpacity.value = withTiming(1, { duration: 350 });
+    translateX.value = withTiming(-TUTORIAL_DISTANCE, { duration: 850 });
+
+    const schedule = (callback: () => void, delay: number) => {
+      const timer = setTimeout(callback, delay);
+      tutorialTimersRef.current.push(timer);
+    };
+
+    schedule(() => {
+      tutorialTextOpacity.value = withTiming(0, { duration: 220 });
+      translateX.value = withTiming(0, { duration: 450 });
+    }, 1400);
+
+    schedule(() => {
+      setTutorialLabel('Swipe Right to Match!');
+      tutorialTextOpacity.value = withTiming(1, { duration: 350 });
+      translateX.value = withTiming(TUTORIAL_DISTANCE, { duration: 850 });
+    }, 1950);
+
+    schedule(() => {
+      tutorialTextOpacity.value = withTiming(0, { duration: 220 });
+      translateX.value = withTiming(0, { duration: 450 });
+    }, 3350);
+
+    schedule(() => {
+      setTutorialLabel('Click on Center of the Card to Show Full Profile');
+      setShowTutorialTap(true);
+      tutorialTextOpacity.value = withTiming(1, { duration: 350 });
+      tutorialTapOpacity.value = withTiming(1, { duration: 250 });
+      tutorialTapScale.value = withRepeat(withTiming(1.18, { duration: 650 }), -1, true);
+    }, 3900);
+
+    schedule(endTutorial, 5800);
+  }, [canShowTutorial, clearIdleTimer, clearTutorialTimers, endTutorial, tutorialOverlayOpacity, tutorialTapOpacity, tutorialTapScale, tutorialTextOpacity, translateX, translateY]);
+
+  const scheduleIdleTutorial = useCallback(() => {
+    clearIdleTimer();
+    if (!canShowTutorial || tutorialActiveRef.current) return;
+    idleTimerRef.current = setTimeout(startTutorial, TUTORIAL_IDLE_DELAY_MS);
+  }, [canShowTutorial, clearIdleTimer, startTutorial]);
+
+  const handleScreenTouch = useCallback(() => {
+    if (!tutorialActiveRef.current) {
+      scheduleIdleTutorial();
+    }
+  }, [scheduleIdleTutorial]);
+
+  const handleTutorialPress = useCallback(() => {
+    abortTapCountRef.current += 1;
+    if (abortTapCountRef.current >= 2) {
+      endTutorial();
+    }
+  }, [endTutorial]);
 
   const fetchDogs = useCallback(async () => {
     setLoading(true);
@@ -76,6 +209,18 @@ export default function SwipeDeckScreen() {
   useEffect(() => {
     fetchDogs();
   }, [fetchDogs]);
+
+  useEffect(() => {
+    scheduleIdleTutorial();
+    return clearIdleTimer;
+  }, [scheduleIdleTutorial, clearIdleTimer]);
+
+  useEffect(() => {
+    return () => {
+      clearIdleTimer();
+      clearTutorialTimers();
+    };
+  }, [clearIdleTimer, clearTutorialTimers]);
 
   // Preload next 3 dogs' images so they're cached before the user sees them
   useEffect(() => {
@@ -247,10 +392,10 @@ export default function SwipeDeckScreen() {
   const nextDog = dogs[currentIndex + 1];
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} onTouchStart={handleScreenTouch}>
       {/* Header */}
       <View style={styles.header}>
-        <Image source={require('../../assets/NewLogo2.png')} style={styles.logo} contentFit="contain" />
+        <Text style={styles.logo}>Fetch</Text>
       </View>
 
       {/* Card Stack */}
@@ -315,6 +460,24 @@ export default function SwipeDeckScreen() {
 
       {/* Match Celebration */}
       {showMatchCelebration && <MatchCelebration />}
+
+      {tutorialActive && (
+        <Pressable style={styles.tutorialLayer} onPress={handleTutorialPress}>
+          <Animated.View style={[styles.tutorialScrim, tutorialOverlayStyle]} />
+          <Animated.View pointerEvents="none" style={[styles.tutorialMessage, tutorialTextStyle]}>
+            <Text style={styles.tutorialText}>{tutorialLabel}</Text>
+            <Text style={styles.tutorialHint}>Tap twice to skip</Text>
+          </Animated.View>
+          {showTutorialTap && (
+            <Animated.View pointerEvents="none" style={[styles.tapIndicator, tutorialTapStyle]}>
+              <View style={styles.tapRing} />
+              <View style={styles.tapHand}>
+                <Ionicons name="hand-left-outline" size={34} color={colors.white} />
+              </View>
+            </Animated.View>
+          )}
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -340,8 +503,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logo: {
-    width: 160,
-    height: 64,
+    fontSize: 38,
+    fontWeight: '800',
+    color: colors.primary,
+    letterSpacing: -1,
   },
   cardContainer: {
     flex: 1,
@@ -477,5 +642,64 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontFamily: 'Nunito_600SemiBold',
+  },
+  tutorialLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 100,
+  },
+  tutorialScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#4A4A4A',
+  },
+  tutorialMessage: {
+    position: 'absolute',
+    top: '18%',
+    left: 24,
+    right: 24,
+    alignItems: 'center',
+  },
+  tutorialText: {
+    color: colors.white,
+    fontSize: 24,
+    lineHeight: 31,
+    textAlign: 'center',
+    fontFamily: 'Nunito_800ExtraBold',
+    textShadowColor: 'rgba(0,0,0,0.35)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  tutorialHint: {
+    marginTop: 8,
+    color: 'rgba(255,255,255,0.82)',
+    fontSize: 13,
+    fontFamily: 'Nunito_600SemiBold',
+  },
+  tapIndicator: {
+    position: 'absolute',
+    top: '45%',
+    left: '50%',
+    width: 86,
+    height: 86,
+    marginLeft: -43,
+    marginTop: -43,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tapRing: {
+    position: 'absolute',
+    width: 86,
+    height: 86,
+    borderRadius: 43,
+    borderWidth: 3,
+    borderColor: colors.white,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+  },
+  tapHand: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.primary,
   },
 });
