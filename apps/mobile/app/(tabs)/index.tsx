@@ -64,6 +64,7 @@ export default function SwipeDeckScreen() {
   const tutorialTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const abortTapCountRef = useRef(0);
   const tutorialActiveRef = useRef(false);
+  const tutorialSeenRef = useRef(false);
   const tutorialOverlayOpacity = useSharedValue(0);
   const tutorialTextOpacity = useSharedValue(0);
   const tutorialTapOpacity = useSharedValue(0);
@@ -117,8 +118,9 @@ export default function SwipeDeckScreen() {
   }, [clearTutorialTimers, tutorialOverlayOpacity, tutorialTapOpacity, tutorialTapScale, tutorialTextOpacity, translateX, translateY]);
 
   const startTutorial = useCallback(() => {
-    if (!canShowTutorial || tutorialActiveRef.current) return;
+    if (!canShowTutorial || tutorialActiveRef.current || tutorialSeenRef.current) return;
 
+    tutorialSeenRef.current = true;
     AsyncStorage.setItem(TUTORIAL_STORAGE_KEY, 'true').catch(() => undefined);
     clearIdleTimer();
     clearTutorialTimers();
@@ -167,7 +169,7 @@ export default function SwipeDeckScreen() {
 
   const scheduleIdleTutorial = useCallback(() => {
     clearIdleTimer();
-    if (!canShowTutorial || tutorialActiveRef.current) return;
+    if (!canShowTutorial || tutorialActiveRef.current || tutorialSeenRef.current) return;
     idleTimerRef.current = setTimeout(startTutorial, TUTORIAL_IDLE_DELAY_MS);
   }, [canShowTutorial, clearIdleTimer, startTutorial]);
 
@@ -211,7 +213,15 @@ export default function SwipeDeckScreen() {
   }, [fetchDogs]);
 
   useEffect(() => {
-    scheduleIdleTutorial();
+    AsyncStorage.getItem(TUTORIAL_STORAGE_KEY).then((seen) => {
+      if (seen === 'true') {
+        tutorialSeenRef.current = true;
+      } else {
+        scheduleIdleTutorial();
+      }
+    }).catch(() => {
+      scheduleIdleTutorial();
+    });
     return clearIdleTimer;
   }, [scheduleIdleTutorial, clearIdleTimer]);
 
@@ -395,7 +405,7 @@ export default function SwipeDeckScreen() {
     <View style={styles.container} onTouchStart={handleScreenTouch}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.logo}>Fetch</Text>
+        <Image source={require('../../assets/NewLogo2.png')} style={styles.logo} contentFit="contain" />
       </View>
 
       {/* Card Stack */}
@@ -503,10 +513,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logo: {
-    fontSize: 38,
-    fontWeight: '800',
-    color: colors.primary,
-    letterSpacing: -1,
+    width: 160,
+    height: 64,
   },
   cardContainer: {
     flex: 1,
