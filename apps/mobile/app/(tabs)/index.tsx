@@ -37,7 +37,7 @@ import type { Dog } from '@fetch/shared';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
 const TUTORIAL_STORAGE_KEY = 'fetch.swipeTutorial.seen';
-const TUTORIAL_IDLE_DELAY_MS = 5000;
+const TUTORIAL_IDLE_DELAY_MS = 3000;
 const TUTORIAL_DISTANCE = SCREEN_WIDTH * 0.34;
 
 export default function SwipeDeckScreen() {
@@ -405,7 +405,7 @@ export default function SwipeDeckScreen() {
     <View style={styles.container} onTouchStart={handleScreenTouch}>
       {/* Header */}
       <View style={styles.header}>
-        <Image source={require('../../assets/NewLogo2.png')} style={styles.logo} contentFit="contain" />
+        <Text style={styles.logo}>Fetch</Text>
       </View>
 
       {/* Card Stack */}
@@ -513,8 +513,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logo: {
-    width: 160,
-    height: 64,
+    fontSize: 52,
+    fontWeight: '800',
+    color: colors.primary,
+    letterSpacing: -1,
   },
   cardContainer: {
     flex: 1,
