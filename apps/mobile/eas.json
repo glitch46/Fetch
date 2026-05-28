@@ -25,6 +25,22 @@
       "android": {
         "buildType": "apk"
       },
+      "ios": {
+        "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://skip-keep-meat-lou.trycloudflare.com",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://ruushiqquescvfhdbodi.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ1dXNoaXFxdWVzY3ZmaGRib2RpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyMjY2MTYsImV4cCI6MjA4NzgwMjYxNn0.ZhfhNf684UKAykY99QQPj34t1SkOYHWQA_I63pwDQkQ",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID": "442294815609-hfnlfapfbihbaa10o6d1tj9c6o8akij3.apps.googleusercontent.com"
+      }
+    },
+    "beta-ios": {
+      "distribution": "internal",
+      "channel": "beta",
+      "ios": {
+        "simulator": true
+      },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://skip-keep-meat-lou.trycloudflare.com",
         "EXPO_PUBLIC_SUPABASE_URL": "https://ruushiqquescvfhdbodi.supabase.co",
@@ -35,6 +51,9 @@
     "production": {
       "android": {
         "buildType": "app-bundle"
+      },
+      "ios": {
+        "simulator": false
       },
       "channel": "production"
     }
