@@ -44,7 +44,8 @@ function mapSize(sizeKey: string | null): DogSize | null {
  * Map Austin Paws sex to our DogGender.
  * API returns: MALE, FEMALE (uppercase)
  */
-function mapGender(sex: string): DogGender {
+function mapGender(sex: string | null): DogGender {
+  if (!sex) return 'Unknown';
   switch (sex.toUpperCase()) {
     case 'MALE': return 'Male';
     case 'FEMALE': return 'Female';
@@ -129,7 +130,7 @@ function toRawDog(dog: AustinPawsDog): RawDog {
 
   return {
     external_id: dog.animal_id,
-    name: dog.name.trim(),
+    name: (dog.name || 'Unknown').trim(),
     breed_primary: dog.breed_primary_name || 'Mixed Breed',
     breed_secondary: null,
     age_group: mapAge(dog.age_key),
