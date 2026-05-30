@@ -75,7 +75,7 @@ Correct approach:
 
 ## Backend Deployment (Hostinger — api.llmgames.org)
 
-The backend is deployed on Hostinger shared hosting at **`https://api.llmgames.org`**. This is a permanent URL — no more ephemeral Cloudflare tunnel URLs.
+The backend is deployed on Hostinger shared hosting at **`https://api.llmgames.org`**. This is a permanent URL. Cloudflare tunnels are **no longer used** — do NOT revert to Cloudflare or LAN IPs.
 
 ### Server Details
 
@@ -88,7 +88,7 @@ The backend is deployed on Hostinger shared hosting at **`https://api.llmgames.o
 ### How It Works
 
 - Hostinger uses **Phusion Passenger** to run Node.js apps
-- `server.js` is the Passenger entry point — it `require('tsx/cjs')` then loads `src/index.ts`
+- `server.js` is the Passenger entry point — it `require('tsx')` then dynamically imports `src/index.ts`
 - `.htaccess` tells Passenger which file to start
 - Environment variables are set in hPanel UI (Website → Node.js → Environment Variables)
 
@@ -102,25 +102,25 @@ ssh u316347496@145.223.104.241 -p 65002
 cd /home/u316347496/fetch-api
 git pull origin main
 
-# Install any new dependencies
-npm install --production
+# Install dependencies (do NOT use --production; tsx is a devDependency)
+npm install
 
 # Restart the app (via hPanel UI, or touch restart.txt if configured)
 ```
 
-### API URL Configuration
+### API URL — Always Use `https://api.llmgames.org`
 
-| Scenario | `EXPO_PUBLIC_API_URL` value |
-|---|---|
-| Expo dev server (`npm run mobile`) | `http://192.168.1.253:3000` (LAN IP) |
-| EAS beta/production build (APK on phone) | `https://api.llmgames.org` |
+**All environments** (local dev, EAS builds, production) should use `https://api.llmgames.org`. There is no reason to use a LAN IP or Cloudflare tunnel anymore.
+
+- `EXPO_PUBLIC_API_URL` in `eas.json` (beta, beta-ios): `https://api.llmgames.org`
+- `EXPO_PUBLIC_API_URL` in `.env` files: `https://api.llmgames.org`
+- **Do NOT** change this to a LAN IP, localhost, or Cloudflare tunnel URL
 
 ### Important Notes
 
 - **EAS builds bake env vars at build time** — changing eas.json alone does NOT update an already-installed APK. You must rebuild.
-- **Android cleartext traffic** — When using `http://` (not `https://`), Android blocks it by default. This is already handled via `expo-build-properties` in `app.json` with `usesCleartextTraffic: true`. Do not remove this.
 - **Do NOT commit `.env` files** — they contain secrets. The `.env` at root and `apps/mobile/.env` are for local dev only.
-- **Hostinger env vars** are set in hPanel, NOT in a `.env` file on disk (though the app will read `.env` if present as a fallback).
+- **Hostinger env vars** — The server reads from `.env` on disk at `/home/u316347496/fetch-api/.env`. These can also be set in hPanel UI.
 
 ## Key Patterns
 
