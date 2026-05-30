@@ -16,6 +16,7 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
+    "expo-build-properties": "^56.0.16",
     "jsonwebtoken": "^9.0.3"
   },
   "overrides": {
