@@ -73,66 +73,54 @@ Correct approach:
 - Mobile uses `EXPO_PUBLIC_*` prefix for client-side vars
 - Backend uses `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `JWT_SECRET`
 
-## Cloudflare Tunnel & API Endpoint Setup (CRITICAL)
+## Backend Deployment (Hostinger — api.llmgames.org)
 
-The mobile app connects to the backend via `EXPO_PUBLIC_API_URL`. This has broken multiple times due to Cloudflare tunnel URL changes. Follow these rules carefully:
+The backend is deployed on Hostinger shared hosting at **`https://api.llmgames.org`**. This is a permanent URL — no more ephemeral Cloudflare tunnel URLs.
+
+### Server Details
+
+- **Host:** Hostinger shared hosting (hPanel)
+- **SSH:** `ssh u316347496@145.223.104.241 -p 65002`
+- **App root:** `/home/u316347496/fetch-api/apps/backend`
+- **Entry file:** `server.js` (Passenger wrapper that loads tsx → `src/index.ts`)
+- **Node.js version:** 20.x (managed via hPanel)
 
 ### How It Works
 
-- The backend runs on the home server at `192.168.1.253:3000`
-- For **local/development builds**, the app connects directly via LAN IP: `http://192.168.1.253:3000`
-- For **EAS builds** (beta APKs installed on phones outside the LAN), the backend must be exposed via a **Cloudflare Tunnel** so the phone can reach it over the internet
+- Hostinger uses **Phusion Passenger** to run Node.js apps
+- `server.js` is the Passenger entry point — it `require('tsx/cjs')` then loads `src/index.ts`
+- `.htaccess` tells Passenger which file to start
+- Environment variables are set in hPanel UI (Website → Node.js → Environment Variables)
 
-### Cloudflare Tunnel Setup
+### Deploying Updates
 
-1. **Install cloudflared** on the backend server (the machine running the Fastify backend):
-   ```bash
-   # Windows (winget)
-   winget install Cloudflare.cloudflared
-   # Or download from https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/
-   ```
+```bash
+# SSH into Hostinger
+ssh u316347496@145.223.104.241 -p 65002
 
-2. **Start a quick tunnel** (no Cloudflare account needed — generates a random `.trycloudflare.com` URL):
-   ```bash
-   cloudflared tunnel --url http://localhost:3000
-   ```
-   This prints a URL like `https://some-random-words.trycloudflare.com`. This URL **changes every time** you restart cloudflared.
+# Pull latest changes
+cd /home/u316347496/fetch-api
+git pull origin main
 
-3. **Copy the tunnel URL** and update it in **all** of these locations:
-   - `apps/mobile/eas.json` → `build.beta.env.EXPO_PUBLIC_API_URL`
-   - `apps/mobile/eas.json` → `build.beta-ios.env.EXPO_PUBLIC_API_URL`
+# Install any new dependencies
+npm install --production
 
-4. **Rebuild the APK** after updating eas.json (env vars are baked in at build time):
-   ```bash
-   cd apps/mobile
-   eas build --platform android --profile beta
-   ```
+# Restart the app (via hPanel UI, or touch restart.txt if configured)
+```
 
-### When to Use Which URL
+### API URL Configuration
 
 | Scenario | `EXPO_PUBLIC_API_URL` value |
 |---|---|
 | Expo dev server (`npm run mobile`) | `http://192.168.1.253:3000` (LAN IP) |
-| EAS beta build (APK on phone) | `https://xxxxx.trycloudflare.com` (tunnel URL) |
-| Production (future) | Your permanent domain |
+| EAS beta/production build (APK on phone) | `https://api.llmgames.org` |
 
-### Common Pitfalls
+### Important Notes
 
-- **Quick tunnel URLs are ephemeral** — they change every restart of `cloudflared`. If the app stops connecting, the tunnel URL probably expired. Re-run `cloudflared tunnel --url http://localhost:3000` and update eas.json.
 - **EAS builds bake env vars at build time** — changing eas.json alone does NOT update an already-installed APK. You must rebuild.
 - **Android cleartext traffic** — When using `http://` (not `https://`), Android blocks it by default. This is already handled via `expo-build-properties` in `app.json` with `usesCleartextTraffic: true`. Do not remove this.
 - **Do NOT commit `.env` files** — they contain secrets. The `.env` at root and `apps/mobile/.env` are for local dev only.
-
-### For a Permanent Setup (Recommended Future Work)
-
-Instead of quick tunnels, create a **named Cloudflare Tunnel** tied to your account with a stable subdomain:
-```bash
-cloudflared tunnel login
-cloudflared tunnel create fetch-backend
-cloudflared tunnel route dns fetch-backend fetch-api.yourdomain.com
-cloudflared tunnel run fetch-backend
-```
-This gives a permanent URL that never changes.
+- **Hostinger env vars** are set in hPanel, NOT in a `.env` file on disk (though the app will read `.env` if present as a fallback).
 
 ## Key Patterns
 
