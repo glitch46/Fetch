@@ -45,13 +45,16 @@ async function main() {
 
   fastify.get('/health', async () => ({ status: 'ok' }));
 
-  // Serve privacy policy page
-  fastify.get('/privacy-policy', async (request, reply) => {
-    const __dirname = dirname(fileURLToPath(import.meta.url));
-    const filePath = resolve(__dirname, '..', 'public', 'privacy-policy.html');
-    const html = readFileSync(filePath, 'utf-8');
-    reply.type('text/html').send(html);
-  });
+  // Serve static pages (privacy policy, data deletion)
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+  const serveStatic = (route: string, file: string) => {
+    fastify.get(route, async (request, reply) => {
+      const html = readFileSync(resolve(__dirname, '..', 'public', file), 'utf-8');
+      reply.type('text/html').send(html);
+    });
+  };
+  serveStatic('/privacy-policy', 'privacy-policy.html');
+  serveStatic('/data-deletion', 'data-deletion.html');
 
   // Manual sync trigger for development
   fastify.get('/sync', async (request, reply) => {
