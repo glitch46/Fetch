@@ -2,8 +2,9 @@
 // Registers all route plugins, CORS, and JWT
 
 import dotenv from 'dotenv';
-import { resolve } from 'path';
-import { existsSync } from 'fs';
+import { resolve, dirname } from 'path';
+import { existsSync, readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
 
 const candidates = [
   resolve(process.cwd(), '.env'),
@@ -43,6 +44,14 @@ async function main() {
   await fastify.register(notificationsRoutes, { prefix: '/notifications' });
 
   fastify.get('/health', async () => ({ status: 'ok' }));
+
+  // Serve privacy policy page
+  fastify.get('/privacy-policy', async (request, reply) => {
+    const __dirname = dirname(fileURLToPath(import.meta.url));
+    const filePath = resolve(__dirname, '..', 'public', 'privacy-policy.html');
+    const html = readFileSync(filePath, 'utf-8');
+    reply.type('text/html').send(html);
+  });
 
   // Manual sync trigger for development
   fastify.get('/sync', async (request, reply) => {

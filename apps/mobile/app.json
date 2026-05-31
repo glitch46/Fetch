@@ -17,7 +17,7 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.fetch.app",
+      "bundleIdentifier": "com.pawfect.fetch",
       "infoPlist": {
         "CFBundleURLTypes": [
           {
@@ -34,7 +34,7 @@
         "backgroundColor": "#FAFAF8"
       },
       "versionCode": 1,
-      "package": "com.fetch.app",
+      "package": "com.pawfect.fetch",
       "intentFilters": [
         {
           "action": "VIEW",
