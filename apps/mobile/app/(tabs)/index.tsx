@@ -26,7 +26,6 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useDogsStore } from '../../store/useDogsStore';
 import DogCard from '../../components/DogCard';
 import MatchCelebration from '../../components/MatchCelebration';
@@ -36,8 +35,7 @@ import type { Dog } from '@fetch/shared';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
-const TUTORIAL_STORAGE_KEY = 'fetch.swipeTutorial.seen';
-const TUTORIAL_IDLE_DELAY_MS = 3000;
+const TUTORIAL_IDLE_DELAY_MS = 1000;
 const TUTORIAL_DISTANCE = SCREEN_WIDTH * 0.34;
 
 export default function SwipeDeckScreen() {
@@ -121,7 +119,6 @@ export default function SwipeDeckScreen() {
     if (!canShowTutorial || tutorialActiveRef.current || tutorialSeenRef.current) return;
 
     tutorialSeenRef.current = true;
-    AsyncStorage.setItem(TUTORIAL_STORAGE_KEY, 'true').catch(() => undefined);
     clearIdleTimer();
     clearTutorialTimers();
     tutorialActiveRef.current = true;
@@ -213,15 +210,7 @@ export default function SwipeDeckScreen() {
   }, [fetchDogs]);
 
   useEffect(() => {
-    AsyncStorage.getItem(TUTORIAL_STORAGE_KEY).then((seen) => {
-      if (seen === 'true') {
-        tutorialSeenRef.current = true;
-      } else {
-        scheduleIdleTutorial();
-      }
-    }).catch(() => {
-      scheduleIdleTutorial();
-    });
+    scheduleIdleTutorial();
     return clearIdleTimer;
   }, [scheduleIdleTutorial, clearIdleTimer]);
 
