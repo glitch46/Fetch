@@ -49,3 +49,6 @@ npm-debug.log*
 
 # Testing
 coverage/
+
+# Build artifacts
+Production/
